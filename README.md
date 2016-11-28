@@ -7,7 +7,7 @@ To use this module, in the `mongo` repository directory do the following:
 
 To build you will need to run
 
-    scons
+    scons LIBPATH=/usr/local/lib
 
 To clean:
     scons -c
