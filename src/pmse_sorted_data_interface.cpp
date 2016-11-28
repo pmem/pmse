@@ -34,6 +34,7 @@
 
 #include "mongo/platform/basic.h"
 #include "mongo/db/storage/sorted_data_interface.h"
+#include "mongo/bson/simple_bsonobj_comparator.h"
 #include "mongo/util/log.h"
 #include "mongo/stdx/memory.h"
 
@@ -121,13 +122,14 @@ public:
         } else {
             cursorType = EOO;
         }
-        if (key == max) {
+        if (SimpleBSONObjComparator::kInstance.evaluate(key == max)) {
+
             // This means scan to end of index.
             _endPosition = nullptr;
             return;
         }
 
-        if (key == min) {
+        if (SimpleBSONObjComparator::kInstance.evaluate(key == min)) {
             // This means scan to end of index.
             _endPosition = 0;
             return;
@@ -319,8 +321,9 @@ public:
                 _cursor.index++;
 
                 if (_endPosition
-                                && (_cursor.node->keys[_cursor.index].getBSON()
-                                                == (*_endPosition).getBSON())) {
+                                && (SimpleBSONObjComparator::kInstance.evaluate(
+                                                _cursor.node->keys[_cursor.index].getBSON()
+                                                == (*_endPosition).getBSON()))) {
                     return {};
                 }
                 if (correctType(_cursor.node->keys[_cursor.index].getBSON()))
@@ -336,8 +339,8 @@ public:
                     _cursor.node = _cursor.node->next;
                     _cursor.index = 0;
                     if (_endPosition
-                                    && (_cursor.node->keys[_cursor.index].getBSON()
-                                                    == (*_endPosition).getBSON())) {
+                                    && (SimpleBSONObjComparator::kInstance.evaluate(_cursor.node->keys[_cursor.index].getBSON()
+                                                    == (*_endPosition).getBSON()))) {
                         return {};
                     }
                     if (correctType(
@@ -358,8 +361,8 @@ public:
             if (_cursor.index > 0) {
                 _cursor.index--;
                 if (_endPosition
-                                && (_cursor.node->keys[_cursor.index].getBSON()
-                                                == (*_endPosition).getBSON())) {
+                                && SimpleBSONObjComparator::kInstance.evaluate((_cursor.node->keys[_cursor.index].getBSON()
+                                                == (*_endPosition).getBSON()))) {
                     return {};
                 }
                 if (correctType(_cursor.node->keys[_cursor.index].getBSON()))
@@ -375,7 +378,7 @@ public:
                     _cursor.node = _cursor.node->previous;
                     _cursor.index = _cursor.node->num_keys - 1;
                     if (_endPosition
-                                    && (_cursor.node->keys[_cursor.index].getBSON()
+                                    && SimpleBSONObjComparator::kInstance.evaluate(_cursor.node->keys[_cursor.index].getBSON()
                                                     == (*_endPosition).getBSON())) {
                         return {};
                     }
@@ -479,25 +482,25 @@ public:
         persistent_ptr<PmseTreeNode> node;
         boost::optional<IndexKeyEntry> nextValue;
 
-        if (key == min) {
+        if (SimpleBSONObjComparator::kInstance.evaluate(key == min)) {
             _cursor.node = _first;
             _cursor.index = 0;
             if (_endPosition
-                            && (_cursor.node->keys[_cursor.index].getBSON()
+                            && SimpleBSONObjComparator::kInstance.evaluate(_cursor.node->keys[_cursor.index].getBSON()
                                             == (*_endPosition).getBSON()))
                 return {};
             return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
                             _cursor.node->values_array[_cursor.index]);
         }
         //only in backward
-        if (key == max) {
+        if (SimpleBSONObjComparator::kInstance.evaluate(key == max)) {
             if (_endPosition && _inf == MAX_END && !inclusive)
                 return {};
 
             _cursor.node = _last;
             _cursor.index = (_cursor.node)->num_keys - 1;
             if (_endPosition
-                            && (_cursor.node->keys[_cursor.index].getBSON()
+                            && SimpleBSONObjComparator::kInstance.evaluate(_cursor.node->keys[_cursor.index].getBSON()
                                             == (*_endPosition).getBSON()))
                 return {};
             return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
@@ -507,7 +510,7 @@ public:
         node = find_leaf(_root, key, _ordering);
 
         if (node == NULL)
-            return NULL;
+            return {};
 
         /*
          * Check if in current node exist value that is equal or bigger than input key
@@ -544,7 +547,7 @@ public:
             _cursor.node = node;
             _cursor.index = i;
 
-            if (_endPosition && (node->keys[i].getBSON() == (*_endPosition).getBSON())) {
+            if (_endPosition && SimpleBSONObjComparator::kInstance.evaluate(node->keys[i].getBSON() == (*_endPosition).getBSON())) {
                 return {};
             }
 

@@ -1,6 +1,4 @@
-## Persistent Memory Storage Engine
-
-This module is designed to natively support operations on Persistent Memory within MongoDB
+## Storage Engine Module for MongoDB
 
 To use this module, in the `mongo` repository directory do the following:
 

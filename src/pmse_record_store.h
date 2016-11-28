@@ -138,7 +138,21 @@ public:
         return StatusWith<RecordId>(RecordId(6, 4));
     }
 
-    virtual StatusWith<RecordId> updateRecord(OperationContext* txn,
+    virtual Status insertRecordsWithDocWriter(OperationContext* txn,
+                                              const DocWriter* const* docs,
+                                              size_t nDocs,
+                                              RecordId* idsOut = nullptr) {
+        // TODO: Implement insertRecordsWithDocWriter
+        std::cout << "Not implemented: insertRecordsWithDocWriter" << std::endl;
+        return Status::OK();
+    }
+
+    virtual void waitForAllEarlierOplogWritesToBeVisible(OperationContext* txn) const {
+        // TODO: Implement insertRecordsWithDocWriter
+        std::cout << "Not implemented: waitForAllEarlierOplogWritesToBeVisible" << std::endl;
+    }
+
+    virtual Status updateRecord(OperationContext* txn,
                                               const RecordId& oldLocation,
                                               const char* data, int len,
                                               bool enforceQuota,
@@ -187,6 +201,20 @@ public:
     virtual void updateStatsAfterRepair(OperationContext* txn,
                                         long long numRecords,
                                         long long dataSize) {
+    }
+
+    /**
+     * @return OK if the validate run successfully
+     *         OK will be returned even if corruption is found
+     *         deatils will be in result
+     */
+    virtual Status validate(OperationContext* txn,
+                            ValidateCmdLevel level,
+                            ValidateAdaptor* adaptor,
+                            ValidateResults* results,
+                            BSONObjBuilder* output) {
+        // TODO: Implement validate
+        return Status::OK();
     }
 
 private:

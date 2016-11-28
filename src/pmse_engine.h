@@ -99,7 +99,7 @@ public:
                                      StringData ident,
                                      const CollectionOptions& options);
 
-    virtual RecordStore* getRecordStore(OperationContext* opCtx,
+    virtual std::unique_ptr<RecordStore> getRecordStore(OperationContext* opCtx,
                                         StringData ns,
                                         StringData ident,
                                         const CollectionOptions& options);
@@ -115,7 +115,7 @@ public:
     virtual Status dropIdent(OperationContext* opCtx, StringData ident);
 
     virtual bool supportsDocLocking() const {
-        return false;
+        return true;
     }
 
     virtual bool supportsDirectoryPerDB() const {
@@ -126,7 +126,7 @@ public:
         return true;
     }
 
-    virtual bool isEphemeral() {
+    virtual bool isEphemeral() const {
         return false;
     }
 

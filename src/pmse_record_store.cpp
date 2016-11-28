@@ -127,7 +127,7 @@ StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
     return StatusWith<RecordId>(RecordId(id));
 }
 
-StatusWith<RecordId> PmseRecordStore::updateRecord(
+Status PmseRecordStore::updateRecord(
                 OperationContext* txn, const RecordId& oldLocation,
                 const char* data, int len, bool enforceQuota,
                 UpdateNotifier* notifier) {
@@ -146,8 +146,9 @@ StatusWith<RecordId> PmseRecordStore::updateRecord(
         });
     } catch (std::exception &e) {
         std::cout << e.what() << std::endl;
+        return Status(ErrorCodes::BadValue, e.what());
     }
-    return oldLocation;
+    return Status::OK();
 }
 
 void PmseRecordStore::deleteRecord(OperationContext* txn,
