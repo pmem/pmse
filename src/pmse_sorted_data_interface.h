@@ -35,6 +35,7 @@
 
 #include "mongo/db/storage/sorted_data_interface.h"
 #include "mongo/db/index/index_descriptor.h"
+#include "mongo/bson/bsonobj_comparator.h"
 
 #include <libpmemobj.h>
 #include <libpmemobj++/persistent_ptr.hpp>
@@ -67,9 +68,9 @@ public:
         return Status::OK();
     }
 
-    virtual void fullValidate(OperationContext* txn, bool full,
+    virtual void fullValidate(OperationContext* txn,
                               long long* numKeysOut,
-                              BSONObjBuilder* output) const {
+                              ValidateResults* fullResults) const {
         // TODO: Implement fullValidate
     }
 

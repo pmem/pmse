@@ -56,14 +56,11 @@ Status Pmse::createRecordStore(OperationContext* opCtx, StringData ns, StringDat
     return Status::OK();
 }
 
-RecordStore* Pmse::getRecordStore(OperationContext* opCtx,
+std::unique_ptr<RecordStore> Pmse::getRecordStore(OperationContext* opCtx,
                                      StringData ns,
                                      StringData ident,
                                      const CollectionOptions& options) {
-    if (ident == "_mdb_catalog") {
-        return new EphemeralForTestRecordStore(ns, &_catalogInfo);
-    }
-    return new PmseRecordStore(ns, options, _DBPATH);
+    return stdx::make_unique<PmseRecordStore>(ns, options, _DBPATH);
 }
 
 Status Pmse::createSortedDataInterface(OperationContext* opCtx,
