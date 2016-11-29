@@ -154,34 +154,39 @@ void PmseListIntPtr::insertKV_capped(uint64_t key,
 }
 
 void PmseListIntPtr::deleteKV(uint64_t key) {
-	auto before = head;
-	for (auto rec = head; rec != nullptr; rec = rec->next) {
-		if (rec->idValue == key) {
-			transaction::exec_tx(pop, [&] {
-				if (before != head) {
-					before->next = rec->next;
-					if (before->next == nullptr)
-					tail = before;
-					before.flush();
-				} else {
-					if(head == rec) {
-						head = rec->next;
-					} else {
-						before->next = rec->next;
-					}
-					if(head == nullptr) {
-						tail = head;
-					}
-				}
-				_size--;
-				//Move to another list
-					delete_persistent<KVPair>(rec);
-				});
-			break;
-		} else {
-			before = rec;
-		}
-	}
+    auto before = head;
+    for (auto rec = head; rec != nullptr; rec = rec->next) {
+        if (rec->idValue == key) {
+            transaction::exec_tx(pop, [&] {
+                if (before != head) {
+                    before->next = rec->next;
+                    if (before->next == nullptr)
+                        tail = before;
+                    before.flush();
+                } else {
+                    if(head == rec) {
+                        head = rec->next;
+                    } else {
+                        before->next = rec->next;
+                        if(rec->next != nullptr) {
+                            tail = rec->next;
+                        } else {
+                            tail = before;
+                        }
+                    }
+                    if(head == nullptr) {
+                        tail = head;
+                    }
+                }
+                _size--;
+                //Move to another list
+                delete_persistent<KVPair>(rec);
+            });
+            break;
+        } else {
+            before = rec;
+        }
+    }
 }
 
 bool PmseListIntPtr::hasKey(uint64_t key) {
