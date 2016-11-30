@@ -62,104 +62,105 @@ public:
     PmseMap() = default;
 
     PmseMap(bool isCapped, uint64_t maxDoc, uint64_t sizeOfColl, uint64_t size = 1000)
-            : _size(isCapped ? CAPPED_SIZE : size), isCapped(isCapped) {
-        maxDocuments = maxDoc;
-        sizeOfCollection = sizeOfColl;
-        list = make_persistent<persistent_ptr<PmseListIntPtr>[]>(_size);
+            : _size(isCapped ? CAPPED_SIZE : size), _isCapped(isCapped) {
+        _maxDocuments = maxDoc;
+        _sizeOfCollection = sizeOfColl;
+        _list = make_persistent<persistent_ptr<PmseListIntPtr>[]>(_size);
     }
 
     ~PmseMap() = default;
 
-	uint64_t insert(persistent_ptr<T> value) {
-		uint64_t id = getNextId();
-		if (!insertKV(id, value)) {
-			return -1;
-		}
-		hashmapSize++;
-		return id;
-	}
+    uint64_t insert(persistent_ptr<T> value) {
+        uint64_t id = getNextId();
+        if (!insertKV(id, value)) {
+            return -1;
+        }
+        _hashmapSize++;
+        return id;
+    }
 
-	bool insertKV(int id, persistent_ptr<T> value) { //internal use
-		if (isCapped) {
-			if (!hasId(id)) {
-				list[id % _size]->insertKV_capped(id, value, isCapped,
-						maxDocuments, sizeOfCollection);
-			} else
-				return false;
-		} else {
-			if (!hasId(id)) {
-				list[id % _size]->insertKV(id, value);
-			} else {
-				return false;
-			}
-		}
-		return true; //correctly added
-	}
+    bool insertKV(int id, persistent_ptr<T> value) { //internal use
+        if (_isCapped) {
+            if (!hasId(id)) {
+                _list[id % _size]->insertKV_capped(id, value, _isCapped,
+                                                   _maxDocuments, _sizeOfCollection);
+            } else
+                return false;
+        } else {
+            if (!hasId(id)) {
+                _list[id % _size]->insertKV(id, value);
+            } else {
+                return false;
+            }
+        }
+        return true; //correctly added
+    }
 
-	bool updateKV(uint64_t id, persistent_ptr<T> value) {
-		if (hasId(id)) {
-			list[id % _size]->update(id, value);
-		} else {
-			return false;
-		}
-		return true;
-	}
+    bool updateKV(uint64_t id, persistent_ptr<T> value) {
+        if (hasId(id)) {
+            _list[id % _size]->update(id, value);
+        } else {
+            return false;
+        }
+        return true;
+    }
 
-	bool hasId(uint64_t id) {
-		return list[id % _size]->hasKey(id);
-	}
+    bool hasId(uint64_t id) {
+        return _list[id % _size]->hasKey(id);
+    }
 
-	bool find(uint64_t id, persistent_ptr<T> *value) {
-		persistent_ptr<InitData> obj;
-		if (list[id % _size]->find(id, obj)) {
-			*value = obj;
-			return true;
-		}
-		*value = nullptr;
-		return false;
-	}
+    bool find(uint64_t id, persistent_ptr<T> *value) {
+        persistent_ptr<InitData> obj;
+        if (_list[id % _size]->find(id, obj)) {
+            *value = obj;
+            return true;
+        }
+        *value = nullptr;
+        return false;
+    }
 
-	bool remove(uint64_t id) {
-		list[id % _size]->deleteKV(id);
-		hashmapSize--;
-		return true;
-	}
+    bool remove(uint64_t id) {
+        _list[id % _size]->deleteKV(id);
+        _hashmapSize--;
+        return true;
+    }
 
-	void initialize(bool firstRun) {
-		for (int i = 0; i < _size; i++) {
-			if (firstRun)
-				list[i] = make_persistent<PmseListIntPtr>();
-			list[i]->setPool();
-		}
-	}
+    void initialize(bool firstRun) {
+        for (int i = 0; i < _size; i++) {
+            if (firstRun)
+                _list[i] = make_persistent<PmseListIntPtr>();
+            _list[i]->setPool();
+        }
+    }
 
-	void deinitialize() {
-		//TODO: deallocate all resources
-	}
+    void deinitialize() {
+        //TODO: deallocate all resources
+    }
 
-	uint64_t fillment() {
-		return hashmapSize;
-	}
+    uint64_t fillment() {
+        return _hashmapSize;
+    }
 
 private:
-	p<uint64_t> counter = 0;
-	p<uint64_t> hashmapSize = 0;
-	const int _size;
-	persistent_ptr<persistent_ptr<PmseListIntPtr>[]> list;
+    const int _size;
+    const bool _isCapped;
+    p<uint64_t> _counter = 0;
+    p<uint64_t> _hashmapSize = 0;
+    p<uint64_t> _maxDocuments;
+    p<uint64_t> _sizeOfCollection;
+    p<uint64_t> _counterCapped = 0;
+    persistent_ptr<persistent_ptr<PmseListIntPtr>[]> _list;
 
-	persistent_ptr<KVPair> getFirstPtr(int listNumber) {
-		if (listNumber < _size)
-			return list[listNumber]->head;
-		return {};
-	}
-	uint64_t getNextId() {
-		this->counter++;
-		return counter;
-	}
-	const bool isCapped;
-	p<uint64_t> maxDocuments;
-	p<uint64_t> sizeOfCollection;
-	p<uint64_t> counterCapped = 0;
+    persistent_ptr<KVPair> getFirstPtr(int listNumber) {
+        if (listNumber < _size)
+            return _list[listNumber]->head;
+        return {};
+    }
+
+    uint64_t getNextId() {
+        this->_counter++;
+        return _counter;
+    }
 };
 }
 #endif /* SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_MAP_H_ */
