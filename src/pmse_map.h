@@ -51,26 +51,24 @@ using namespace nvml::obj;
 
 namespace mongo {
 
-const uint64_t HASHTABLE_SIZE = 1000;
 const uint64_t CAPPED_SIZE = 1;
-
 
 class PmseRecordCursor;
 
 template<typename T>
 class PmseMap {
-	friend PmseRecordCursor;
+    friend PmseRecordCursor;
 public:
-	PmseMap() = default;
-	PmseMap(bool isCapped, p<uint64_t> maxDoc, p<uint64_t> sizeOfColl) :
-				_size(isCapped ? CAPPED_SIZE : HASHTABLE_SIZE) {
-		this->isCapped = isCapped;
-		maxDocuments = maxDoc;
-		sizeOfCollection = sizeOfColl;
-		list = make_persistent<persistent_ptr<PmseListIntPtr>[]>(_size);
-	}
+    PmseMap() = default;
 
-	~PmseMap() = default;
+    PmseMap(bool isCapped, uint64_t maxDoc, uint64_t sizeOfColl, uint64_t size = 1000)
+            : _size(isCapped ? CAPPED_SIZE : size), isCapped(isCapped) {
+        maxDocuments = maxDoc;
+        sizeOfCollection = sizeOfColl;
+        list = make_persistent<persistent_ptr<PmseListIntPtr>[]>(_size);
+    }
+
+    ~PmseMap() = default;
 
 	uint64_t insert(persistent_ptr<T> value) {
 		uint64_t id = getNextId();
@@ -158,7 +156,7 @@ private:
 		this->counter++;
 		return counter;
 	}
-	bool isCapped;
+	const bool isCapped;
 	p<uint64_t> maxDocuments;
 	p<uint64_t> sizeOfCollection;
 	p<uint64_t> counterCapped = 0;
