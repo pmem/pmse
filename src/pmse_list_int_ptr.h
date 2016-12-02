@@ -78,7 +78,7 @@ public:
 			bool isCapped, uint64_t maxDoc, uint64_t sizeOfColl);
 	bool find(uint64_t key, persistent_ptr<InitData> &item_ptr);
 	void update(uint64_t key, persistent_ptr<InitData> value);
-	void deleteKV(uint64_t key);
+	void deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted);
 	bool hasKey(uint64_t key);
 	void clear();
 	void setPool();
