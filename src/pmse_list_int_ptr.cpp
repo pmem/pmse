@@ -44,16 +44,15 @@
 
 namespace mongo {
 
-PmseListIntPtr::PmseListIntPtr() :
-		counter(1) {
-	pop = pool_by_vptr(this);
+PmseListIntPtr::PmseListIntPtr() : counter(1) {
+    pop = pool_by_vptr(this);
 };
 
 PmseListIntPtr::~PmseListIntPtr() {
 }
 
 void PmseListIntPtr::setPool() {
-	pop = pool_by_vptr(this);
+    pop = pool_by_vptr(this);
 }
 
 uint64_t PmseListIntPtr::size() {
@@ -61,90 +60,90 @@ uint64_t PmseListIntPtr::size() {
 }
 
 void PmseListIntPtr::insertKV(uint64_t key, persistent_ptr<InitData> value) {
-	try {
-		transaction::exec_tx(pop, [&] {
-			persistent_ptr<KVPair> pair = make_persistent<KVPair>();
-			pair->idValue = key;
-			pair->ptr = value;
-			pair->next = nullptr;
-			if (head != nullptr) {
-				tail->next = pair;
-				tail = pair;
-			} else {
-				head = pair;
-				tail = head;
-			}
-			_size++;
-		});
-	} catch (std::exception &e) {
-		std::cout << "KVMapper: " << e.what() << std::endl;
-	}
+    try {
+        transaction::exec_tx(pop, [&] {
+            persistent_ptr<KVPair> pair = make_persistent<KVPair>();
+            pair->idValue = key;
+            pair->ptr = value;
+            pair->next = nullptr;
+            if (head != nullptr) {
+                tail->next = pair;
+                tail = pair;
+            } else {
+                head = pair;
+                tail = head;
+            }
+            _size++;
+        });
+    } catch (std::exception &e) {
+        std::cout << "KVMapper: " << e.what() << std::endl;
+    }
 }
 
 void PmseListIntPtr::insertKV_capped(uint64_t key,
-		persistent_ptr<InitData> value, bool isCapped, uint64_t maxDoc,
-		uint64_t sizeOfColl) {
-	try {
-		transaction::exec_tx(pop, [&] {
-					persistent_ptr<KVPair> pair = make_persistent<KVPair>();
-					pair->idValue = key;
-					pair->ptr = value;
-					pair->next = nullptr;
+                                     persistent_ptr<InitData> value, bool isCapped, uint64_t maxDoc,
+                                     uint64_t sizeOfColl) {
+    try {
+        transaction::exec_tx(pop, [&] {
+            persistent_ptr<KVPair> pair = make_persistent<KVPair>();
+            pair->idValue = key;
+            pair->ptr = value;
+            pair->next = nullptr;
 
-					isFullCapped = false;
-					size_t pair_size = pmemobj_alloc_usable_size(pair.raw());
-					size_t value_size = pmemobj_alloc_usable_size(value.raw());
-					uint64_t tempSize = actualSizeOfCollecion + pair_size + value_size;
+            isFullCapped = false;
+            size_t pair_size = pmemobj_alloc_usable_size(pair.raw());
+            size_t value_size = pmemobj_alloc_usable_size(value.raw());
+            uint64_t tempSize = actualSizeOfCollecion + pair_size + value_size;
 
-					if(tempSize >= sizeOfColl) {
-						if((tempSize - (pmemobj_alloc_usable_size(head.raw()) + sizeOfFirstData)) > sizeOfColl)
-						isSpace = BLOCKED;
-						else
-						isSpace = NO;
-					}
-					else
-					isSpace = YES;
+            if(tempSize >= sizeOfColl) {
+                if((tempSize - (pmemobj_alloc_usable_size(head.raw()) + sizeOfFirstData)) > sizeOfColl)
+                    isSpace = BLOCKED;
+                else
+                    isSpace = NO;
+            }
+            else
+                isSpace = YES;
 
-					if(head != nullptr) {
-						if(_size == maxDoc || isSpace == NO) {
-							if(head->next != nullptr) {
-								head = head->next;
-								tail->next = pair;
-								tail = pair;
-							}
-							else {
-								head = pair;
-								tail = head;
-							}
+            if(head != nullptr) {
+                if(_size == maxDoc || isSpace == NO) {
+                    if(head->next != nullptr) {
+                        head = head->next;
+                        tail->next = pair;
+                        tail = pair;
+                    }
+                    else {
+                        head = pair;
+                        tail = head;
+                    }
 
-							actualSizeOfCollecion = actualSizeOfCollecion - (sizeOfFirstData + pmemobj_alloc_usable_size(head.raw()))
-							+ pair_size + value_size;
+                    actualSizeOfCollecion -= (sizeOfFirstData + pmemobj_alloc_usable_size(head.raw()))
+                                    + pair_size + value_size;
 
-							if(!isFullCapped)
-							isFullCapped = true;
+                    if(!isFullCapped)
+                        isFullCapped = true;
 
-							delete_persistent<KVPair>(first);
-							first = head;
-							sizeOfFirstData = value_size;
-						} else if(isSpace == YES) {
-							tail->next = pair;
-							tail = pair;
-							actualSizeOfCollecion = tempSize;
-						}
-					} else if(head == nullptr) {
-						head = pair;
-						tail = head;
-						first = head;
-						sizeOfFirstData = value_size;
-						actualSizeOfCollecion = tempSize;
-					}
+                    delete_persistent<KVPair>(first);
+                    first = head;
+                    sizeOfFirstData = value_size;
+                } else if(isSpace == YES) {
+                    tail->next = pair;
+                    tail = pair;
+                    actualSizeOfCollecion = tempSize;
+                }
+            } else if(head == nullptr) {
+                head = pair;
+                tail = head;
+                first = head;
+                sizeOfFirstData = value_size;
+                actualSizeOfCollecion = tempSize;
+            }
 
-					if(!isFullCapped)
-					_size++;
-				});
-	} catch (std::exception &e) {
-		std::cout << "KVMapper: " << e.what() << std::endl;
-	}
+            if(!isFullCapped)
+                _size++;
+        });
+    } catch (std::exception &e) {
+        std::cout << "KVMapper: " << e.what() << std::endl;
+    }
 }
 
 void PmseListIntPtr::deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted) {
@@ -191,52 +190,50 @@ void PmseListIntPtr::deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted) {
 }
 
 bool PmseListIntPtr::hasKey(uint64_t key) {
-	for (auto rec = head; rec != nullptr; rec = rec->next) {
-		if (rec->idValue == key) {
-			return true;
-		}
-	}
-	return false;
+    for (auto rec = head; rec != nullptr; rec = rec->next) {
+        if (rec->idValue == key) {
+            return true;
+        }
+    }
+    return false;
 }
 
-bool PmseListIntPtr::find(uint64_t key,
-		persistent_ptr<InitData> &item_ptr) {
-	for (auto rec = head; rec != nullptr; rec = rec->next) {
-		if (rec->idValue == key) {
-			item_ptr = rec->ptr;
-			return true;
-		}
-	}
-	item_ptr = nullptr;
-	return 0;
+bool PmseListIntPtr::find(uint64_t key, persistent_ptr<InitData> &item_ptr) {
+    for (auto rec = head; rec != nullptr; rec = rec->next) {
+        if (rec->idValue == key) {
+            item_ptr = rec->ptr;
+            return true;
+        }
+    }
+    item_ptr = nullptr;
+    return 0;
 }
 
-void PmseListIntPtr::update(uint64_t key,
-		persistent_ptr<InitData> value) {
-	for (auto rec = head; rec != nullptr; rec = rec->next) {
-		if (rec->idValue == key) {
-			rec->ptr = value;
-			return;
-		}
-	}
+void PmseListIntPtr::update(uint64_t key, persistent_ptr<InitData> value) {
+    for (auto rec = head; rec != nullptr; rec = rec->next) {
+        if (rec->idValue == key) {
+            rec->ptr = value;
+            return;
+        }
+    }
 }
 
 void PmseListIntPtr::clear() {
-	if (!head)
-		return;
-	transaction::exec_tx(pop, [&] {
-		for(auto rec = head; rec != nullptr; rec = rec->next) {
-			auto temp = rec->next;
-			delete_persistent<KVPair>(rec);
-			rec = temp;
-		}
-		head = nullptr;
-		_size = 0;
-	});
+    if (!head)
+        return;
+    transaction::exec_tx(pop, [&] {
+        for(auto rec = head; rec != nullptr; rec = rec->next) {
+            auto temp = rec->next;
+            delete_persistent<KVPair>(rec);
+            rec = temp;
+        }
+        head = nullptr;
+        _size = 0;
+    });
 }
 
 uint64_t PmseListIntPtr::getNextId() {
-	return counter++;
+    return counter++;
 }
 
 }
