@@ -120,7 +120,7 @@ public:
     }
 
     bool remove(uint64_t id) {
-        _list[id % _size]->deleteKV(id);
+        _list[id % _size]->deleteKV(id, _deleted);
         _hashmapSize--;
         return true;
     }
@@ -150,6 +150,7 @@ private:
     p<uint64_t> _sizeOfCollection;
     p<uint64_t> _counterCapped = 0;
     persistent_ptr<persistent_ptr<PmseListIntPtr>[]> _list;
+    persistent_ptr<KVPair> _deleted;
 
     persistent_ptr<KVPair> getFirstPtr(int listNumber) {
         if (listNumber < _size)
@@ -158,7 +159,26 @@ private:
     }
 
     uint64_t getNextId() {
-        this->_counter++;
+        if(_counter != std::numeric_limits<uint64_t>::max()-1) {
+            this->_counter++;
+        } else {
+            if(_deleted != nullptr) {
+                pool_base pop;
+                pop = pool_by_vptr(this);
+                auto temp = _deleted;
+                uint64_t id = 0;
+                transaction::exec_tx(pop, [&] {
+                    id = _deleted->idValue;
+                    _deleted = _deleted->next;
+                    delete_persistent<KVPair>(temp);
+
+                });
+                return id;
+            } else {
+                // Max Id hit and no deleted items in queue
+                return 0;
+            }
+        }
         return _counter;
     }
 };

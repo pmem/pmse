@@ -57,15 +57,10 @@ void PmseListIntPtr::setPool() {
 }
 
 uint64_t PmseListIntPtr::size() {
-	int size = 0;
-	for (auto rec = head; rec != nullptr; rec = rec->next) {
-		++size;
-	}
-	return size;
+    return _size;
 }
 
-void PmseListIntPtr::insertKV(uint64_t key,
-		persistent_ptr<InitData> value) {
+void PmseListIntPtr::insertKV(uint64_t key, persistent_ptr<InitData> value) {
 	try {
 		transaction::exec_tx(pop, [&] {
 			persistent_ptr<KVPair> pair = make_persistent<KVPair>();
@@ -90,8 +85,7 @@ void PmseListIntPtr::insertKV_capped(uint64_t key,
 		persistent_ptr<InitData> value, bool isCapped, uint64_t maxDoc,
 		uint64_t sizeOfColl) {
 	try {
-		transaction::exec_tx(pop,
-				[&] {
+		transaction::exec_tx(pop, [&] {
 					persistent_ptr<KVPair> pair = make_persistent<KVPair>();
 					pair->idValue = key;
 					pair->ptr = value;
@@ -153,7 +147,7 @@ void PmseListIntPtr::insertKV_capped(uint64_t key,
 	}
 }
 
-void PmseListIntPtr::deleteKV(uint64_t key) {
+void PmseListIntPtr::deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted) {
     auto before = head;
     for (auto rec = head; rec != nullptr; rec = rec->next) {
         if (rec->idValue == key) {
@@ -179,8 +173,15 @@ void PmseListIntPtr::deleteKV(uint64_t key) {
                     }
                 }
                 _size--;
-                //Move to another list
-                delete_persistent<KVPair>(rec);
+                transaction::exec_tx(pop, [&] {
+                    if(deleted != nullptr) {
+                        rec->next = deleted;
+                        deleted = rec;
+                    } else {
+                        rec->next = nullptr;
+                        deleted = rec;
+                    }
+                });
             });
             break;
         } else {
@@ -230,6 +231,7 @@ void PmseListIntPtr::clear() {
 			rec = temp;
 		}
 		head = nullptr;
+		_size = 0;
 	});
 }
 
