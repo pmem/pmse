@@ -172,15 +172,14 @@ void PmseListIntPtr::deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted) {
                     }
                 }
                 _size--;
-                transaction::exec_tx(pop, [&] {
-                    if(deleted != nullptr) {
-                        rec->next = deleted;
-                        deleted = rec;
-                    } else {
-                        rec->next = nullptr;
-                        deleted = rec;
-                    }
-                });
+                if(deleted != nullptr) {
+                    rec->next = deleted;
+                    deleted = rec;
+                } else {
+                    rec->next = nullptr;
+                    deleted = rec;
+                }
+
             });
             break;
         } else {

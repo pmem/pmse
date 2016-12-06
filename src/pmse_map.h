@@ -52,6 +52,7 @@ using namespace nvml::obj;
 namespace mongo {
 
 const uint64_t CAPPED_SIZE = 1;
+const uint64_t HASHTABLE_SIZE = 1000;
 
 class PmseRecordCursor;
 
@@ -61,11 +62,15 @@ class PmseMap {
 public:
     PmseMap() = default;
 
-    PmseMap(bool isCapped, uint64_t maxDoc, uint64_t sizeOfColl, uint64_t size = 1000)
-            : _size(isCapped ? CAPPED_SIZE : size), _isCapped(isCapped) {
+    PmseMap(bool isCapped, uint64_t maxDoc, uint64_t sizeOfColl, uint64_t size = HASHTABLE_SIZE)
+    : _size(isCapped ? CAPPED_SIZE : size), _isCapped(isCapped) {
         _maxDocuments = maxDoc;
         _sizeOfCollection = sizeOfColl;
-        _list = make_persistent<persistent_ptr<PmseListIntPtr>[]>(_size);
+        try {
+            _list = make_persistent<persistent_ptr<PmseListIntPtr>[]>(_size);
+        } catch (std::exception &e) {
+            std::cout << "PmseMap: " << e.what() << std::endl;
+        }
     }
 
     ~PmseMap() = default;
@@ -126,9 +131,14 @@ public:
     }
 
     void initialize(bool firstRun) {
-        for (int i = 0; i < _size; i++) {
-            if (firstRun)
-                _list[i] = make_persistent<PmseListIntPtr>();
+        for(int i = 0; i < _size; i++) {
+            if (firstRun) {
+                try {
+                    _list[i] = make_persistent<PmseListIntPtr>();
+                } catch(std::exception &e) {
+                    std::cout << e.what() << std::endl;
+                }
+            }
             _list[i]->setPool();
         }
     }
