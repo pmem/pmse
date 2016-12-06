@@ -159,25 +159,22 @@ private:
     }
 
     uint64_t getNextId() {
-        if(_counter != std::numeric_limits<uint64_t>::max()-1) {
-            this->_counter++;
+        if(_deleted != nullptr) {
+            pool_base pop;
+            pop = pool_by_vptr(this);
+            auto temp = _deleted;
+            uint64_t id = 0;
+            transaction::exec_tx(pop, [&] {
+                id = _deleted->idValue;
+                _deleted = _deleted->next;
+                delete_persistent<KVPair>(temp);
+            });
+            return id;
         } else {
-            if(_deleted != nullptr) {
-                pool_base pop;
-                pop = pool_by_vptr(this);
-                auto temp = _deleted;
-                uint64_t id = 0;
-                transaction::exec_tx(pop, [&] {
-                    id = _deleted->idValue;
-                    _deleted = _deleted->next;
-                    delete_persistent<KVPair>(temp);
-
-                });
-                return id;
-            } else {
-                // Max Id hit and no deleted items in queue
+            if(_counter != std::numeric_limits<uint64_t>::max()-1)
+                this->_counter++;
+            else
                 return 0;
-            }
         }
         return _counter;
     }
