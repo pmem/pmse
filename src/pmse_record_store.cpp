@@ -131,18 +131,13 @@ Status PmseRecordStore::updateRecord(
                 OperationContext* txn, const RecordId& oldLocation,
                 const char* data, int len, bool enforceQuota,
                 UpdateNotifier* notifier) {
-
     persistent_ptr<InitData> obj;
-    persistent_ptr<InitData> oldObj = nullptr;
-
-    mapper->find(oldLocation.repr(), &oldObj);
     try {
         transaction::exec_tx(mapPool, [&] {
             obj = pmemobj_tx_alloc(sizeof(InitData::size) + len, 1);
             obj->size = len;
             memcpy(obj->data, data, len);
             mapper->updateKV(oldLocation.repr(), obj);
-            delete_persistent<InitData>(oldObj);
         });
     } catch (std::exception &e) {
         std::cout << e.what() << std::endl;
@@ -153,17 +148,7 @@ Status PmseRecordStore::updateRecord(
 
 void PmseRecordStore::deleteRecord(OperationContext* txn,
                                       const RecordId& dl) {
-    persistent_ptr<InitData> obj = nullptr;
-    mapper->find((uint64_t) dl.repr(), &obj);
     mapper->remove((uint64_t) dl.repr());
-
-    try {
-        transaction::exec_tx(mapPool, [&] {
-            delete_persistent<InitData>(obj);
-        });
-    } catch (std::exception &e) {
-        std::cout << e.what() << std::endl;
-    }
 }
 
 void PmseRecordStore::setCappedCallback(CappedCallback*) {
@@ -173,7 +158,7 @@ void PmseRecordStore::setCappedCallback(CappedCallback*) {
 bool PmseRecordStore::findRecord(OperationContext* txn, const RecordId& loc,
                                     RecordData* rd) const {
     persistent_ptr<InitData> obj;
-    if(mapper->find((uint64_t) loc.repr(), &obj)){
+    if(mapper->find((uint64_t) loc.repr(), obj)){
         invariant(obj != nullptr);
         *rd = RecordData(obj->data, obj->size);
         return true;
@@ -220,7 +205,7 @@ boost::optional<Record> PmseRecordCursor::next() {
 
 boost::optional<Record> PmseRecordCursor::seekExact(const RecordId& id) {
     persistent_ptr<InitData> obj = nullptr;
-    bool status = _mapper->find(id.repr(), &obj);
+    bool status = _mapper->find(id.repr(), obj);
     if (!status || !obj) {
         return {};
     }

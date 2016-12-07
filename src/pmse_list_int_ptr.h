@@ -73,11 +73,11 @@ class PmseListIntPtr {
 public:
     PmseListIntPtr();
     ~PmseListIntPtr();
-    void insertKV(uint64_t key, persistent_ptr<InitData> value);
-    void insertKV_capped(uint64_t key, persistent_ptr<InitData> value,
+    void insertKV(persistent_ptr<KVPair> &key, persistent_ptr<InitData> &value);
+    void insertKV_capped(persistent_ptr<KVPair> &key, persistent_ptr<InitData> &value,
                          bool isCapped, uint64_t maxDoc, uint64_t sizeOfColl);
     bool find(uint64_t key, persistent_ptr<InitData> &item_ptr);
-    void update(uint64_t key, persistent_ptr<InitData> value);
+    void update(uint64_t key, persistent_ptr<InitData> &value);
     void deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted);
     bool hasKey(uint64_t key);
     void clear();
