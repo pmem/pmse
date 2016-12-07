@@ -59,18 +59,16 @@ uint64_t PmseListIntPtr::size() {
     return _size;
 }
 
-void PmseListIntPtr::insertKV(uint64_t key, persistent_ptr<InitData> value) {
+void PmseListIntPtr::insertKV(persistent_ptr<KVPair> &key, persistent_ptr<InitData> &value) {
     try {
         transaction::exec_tx(pop, [&] {
-            persistent_ptr<KVPair> pair = make_persistent<KVPair>();
-            pair->idValue = key;
-            pair->ptr = value;
-            pair->next = nullptr;
+            key->ptr = value;
+            key->next = nullptr;
             if (head != nullptr) {
-                tail->next = pair;
-                tail = pair;
+                tail->next = key;
+                tail = key;
             } else {
-                head = pair;
+                head = key;
                 tail = head;
             }
             _size++;
@@ -80,18 +78,17 @@ void PmseListIntPtr::insertKV(uint64_t key, persistent_ptr<InitData> value) {
     }
 }
 
-void PmseListIntPtr::insertKV_capped(uint64_t key,
-                                     persistent_ptr<InitData> value, bool isCapped, uint64_t maxDoc,
+void PmseListIntPtr::insertKV_capped(persistent_ptr<KVPair> &key,
+                                     persistent_ptr<InitData> &value,
+                                     bool isCapped, uint64_t maxDoc,
                                      uint64_t sizeOfColl) {
     try {
         transaction::exec_tx(pop, [&] {
-            persistent_ptr<KVPair> pair = make_persistent<KVPair>();
-            pair->idValue = key;
-            pair->ptr = value;
-            pair->next = nullptr;
+            key->ptr = value;
+            key->next = nullptr;
 
             isFullCapped = false;
-            size_t pair_size = pmemobj_alloc_usable_size(pair.raw());
+            size_t pair_size = pmemobj_alloc_usable_size(key.raw());
             size_t value_size = pmemobj_alloc_usable_size(value.raw());
             uint64_t tempSize = actualSizeOfCollecion + pair_size + value_size;
 
@@ -108,11 +105,11 @@ void PmseListIntPtr::insertKV_capped(uint64_t key,
                 if(_size == maxDoc || isSpace == NO) {
                     if(head->next != nullptr) {
                         head = head->next;
-                        tail->next = pair;
-                        tail = pair;
+                        tail->next = key;
+                        tail = key;
                     }
                     else {
-                        head = pair;
+                        head = key;
                         tail = head;
                     }
 
@@ -126,12 +123,12 @@ void PmseListIntPtr::insertKV_capped(uint64_t key,
                     first = head;
                     sizeOfFirstData = value_size;
                 } else if(isSpace == YES) {
-                    tail->next = pair;
-                    tail = pair;
+                    tail->next = key;
+                    tail = key;
                     actualSizeOfCollecion = tempSize;
                 }
             } else if(head == nullptr) {
-                head = pair;
+                head = key;
                 tail = head;
                 first = head;
                 sizeOfFirstData = value_size;
@@ -172,15 +169,14 @@ void PmseListIntPtr::deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted) {
                     }
                 }
                 _size--;
-                transaction::exec_tx(pop, [&] {
-                    if(deleted != nullptr) {
-                        rec->next = deleted;
-                        deleted = rec;
-                    } else {
-                        rec->next = nullptr;
-                        deleted = rec;
-                    }
-                });
+                if(deleted != nullptr) {
+                    rec->next = deleted;
+                    deleted = rec;
+                } else {
+                    rec->next = nullptr;
+                    deleted = rec;
+                }
+                delete_persistent<InitData>(deleted->ptr);
             });
             break;
         } else {
@@ -209,9 +205,18 @@ bool PmseListIntPtr::find(uint64_t key, persistent_ptr<InitData> &item_ptr) {
     return 0;
 }
 
-void PmseListIntPtr::update(uint64_t key, persistent_ptr<InitData> value) {
+void PmseListIntPtr::update(uint64_t key, persistent_ptr<InitData> &value) {
     for (auto rec = head; rec != nullptr; rec = rec->next) {
         if (rec->idValue == key) {
+            if(rec->ptr != nullptr) {
+                try {
+                    transaction::exec_tx(pop, [&] {
+                        delete_persistent<InitData>(rec->ptr);
+                    });
+                } catch(std::exception &e) {
+                    std::cout << e.what() << std::endl;
+                }
+            }
             rec->ptr = value;
             return;
         }

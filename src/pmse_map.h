@@ -52,7 +52,7 @@ using namespace nvml::obj;
 namespace mongo {
 
 const uint64_t CAPPED_SIZE = 1;
-
+const uint64_t HASHMAP_SIZE = 1000;
 class PmseRecordCursor;
 
 template<typename T>
@@ -61,34 +61,38 @@ class PmseMap {
 public:
     PmseMap() = default;
 
-    PmseMap(bool isCapped, uint64_t maxDoc, uint64_t sizeOfColl, uint64_t size = 1000)
+    PmseMap(bool isCapped, uint64_t maxDoc, uint64_t sizeOfColl, uint64_t size = HASHMAP_SIZE)
             : _size(isCapped ? CAPPED_SIZE : size), _isCapped(isCapped) {
         _maxDocuments = maxDoc;
         _sizeOfCollection = sizeOfColl;
-        _list = make_persistent<persistent_ptr<PmseListIntPtr>[]>(_size);
+        try {
+            _list = make_persistent<persistent_ptr<PmseListIntPtr>[]>(_size);
+        } catch (std::exception &e) {
+            std::cout << "PmseMap: " << e.what() << std::endl;
+        }
     }
 
     ~PmseMap() = default;
 
     uint64_t insert(persistent_ptr<T> value) {
-        uint64_t id = getNextId();
+        auto id = getNextId();
         if (!insertKV(id, value)) {
             return -1;
         }
         _hashmapSize++;
-        return id;
+        return id->idValue;
     }
 
-    bool insertKV(int id, persistent_ptr<T> value) { //internal use
+    bool insertKV(persistent_ptr<KVPair> &id, persistent_ptr<T> value) { //internal use
         if (_isCapped) {
-            if (!hasId(id)) {
-                _list[id % _size]->insertKV_capped(id, value, _isCapped,
+            if (!hasId(id->idValue)) {
+                _list[id->idValue % _size]->insertKV_capped(id, value, _isCapped,
                                                    _maxDocuments, _sizeOfCollection);
             } else
                 return false;
         } else {
-            if (!hasId(id)) {
-                _list[id % _size]->insertKV(id, value);
+            if (!hasId(id->idValue)) {
+                _list[id->idValue % _size]->insertKV(id, value);
             } else {
                 return false;
             }
@@ -109,13 +113,13 @@ public:
         return _list[id % _size]->hasKey(id);
     }
 
-    bool find(uint64_t id, persistent_ptr<T> *value) {
+    bool find(uint64_t id, persistent_ptr<T> &value) {
         persistent_ptr<InitData> obj;
         if (_list[id % _size]->find(id, obj)) {
-            *value = obj;
+            value = obj;
             return true;
         }
-        *value = nullptr;
+        value = nullptr;
         return false;
     }
 
@@ -126,9 +130,14 @@ public:
     }
 
     void initialize(bool firstRun) {
-        for (int i = 0; i < _size; i++) {
-            if (firstRun)
-                _list[i] = make_persistent<PmseListIntPtr>();
+        for(int i = 0; i < _size; i++) {
+            if (firstRun) {
+                try {
+                    _list[i] = make_persistent<PmseListIntPtr>();
+                } catch(std::exception &e) {
+                    std::cout << e.what() << std::endl;
+                }
+            }
             _list[i]->setPool();
         }
     }
@@ -157,29 +166,34 @@ private:
             return _list[listNumber]->head;
         return {};
     }
-
-    uint64_t getNextId() {
-        if(_counter != std::numeric_limits<uint64_t>::max()-1) {
-            this->_counter++;
-        } else {
-            if(_deleted != nullptr) {
+    persistent_ptr<KVPair> getNextId() {
+        persistent_ptr<KVPair> temp = nullptr;
+        if(_deleted == nullptr) {
+            if(_counter != std::numeric_limits<uint64_t>::max()-1) {
+                this->_counter++;
                 pool_base pop;
                 pop = pool_by_vptr(this);
-                auto temp = _deleted;
-                uint64_t id = 0;
-                transaction::exec_tx(pop, [&] {
-                    id = _deleted->idValue;
-                    _deleted = _deleted->next;
-                    delete_persistent<KVPair>(temp);
-
-                });
-                return id;
+                try {
+                    transaction::exec_tx(pop, [&] {
+                        temp = make_persistent<KVPair>();
+                        temp->idValue = _counter;
+                    });
+                } catch (std::exception &e) {
+                    std::cout << "Next id generation: " << e.what() << std::endl;
+                }
             } else {
-                // Max Id hit and no deleted items in queue
-                return 0;
+                return nullptr;
             }
+        } else {
+            temp = _deleted;
+            uint64_t id = 0;
+            pool_base pop;
+            pop = pool_by_vptr(this);
+            id = _deleted->idValue;
+            _deleted = _deleted->next;
+            return temp;
         }
-        return _counter;
+        return temp;
     }
 };
 }
