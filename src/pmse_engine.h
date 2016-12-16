@@ -63,9 +63,9 @@ struct ident_entry {
     p<uint64_t> value;
 };
 
-class Pmse : public KVEngine {
+class PmseEngine : public KVEngine {
 public:
-    Pmse(std::string dbpath) : _DBPATH(dbpath) {
+    PmseEngine(std::string dbpath) : _DBPATH(dbpath) {
         std::cout << "createRecordStore constructor\n";
         std::string path = _DBPATH+_IDENT_FILENAME.toString();
         if (!boost::filesystem::exists(path)) {
@@ -85,7 +85,7 @@ public:
         };
         identList->setPool(pop);
     }
-    virtual ~Pmse() {
+    virtual ~PmseEngine() {
         pop.close();
     }
 
@@ -100,9 +100,9 @@ public:
                                      const CollectionOptions& options);
 
     virtual std::unique_ptr<RecordStore> getRecordStore(OperationContext* opCtx,
-                                        StringData ns,
-                                        StringData ident,
-                                        const CollectionOptions& options);
+                                                        StringData ns,
+                                                        StringData ident,
+                                                        const CollectionOptions& options);
 
     virtual Status createSortedDataInterface(OperationContext* opCtx,
                                              StringData ident,
@@ -130,7 +130,6 @@ public:
         return false;
     }
 
-
     virtual int64_t getIdentSize(OperationContext* opCtx, StringData ident) {
         // TODO: Implement getIdentSize
         return 1;
@@ -141,19 +140,16 @@ public:
     }
 
     virtual bool hasIdent(OperationContext* opCtx, StringData ident) const {
-        // TODO: Implement hasIdent
         std::cout << "hasIdent" << std::endl;
         return identList->hasKey(ident.toString().c_str());
-//        return false;
     }
 
     std::vector<std::string> getAllIdents(OperationContext* opCtx) const {
-        // TODO: Implement returning vector of idents
         std::cout << "getAllIdents" << std::endl;
         return identList->getKeys();
     }
 
-    virtual void cleanShutdown(){};
+    virtual void cleanShutdown() {};
 
     void setJournalListener(JournalListener* jl) final {}
 

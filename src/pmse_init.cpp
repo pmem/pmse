@@ -56,7 +56,7 @@ public:
         options.directoryPerDB = params.directoryperdb;
         options.forRepair = params.repair;
         std::cout << params.dbpath << std::endl;
-        return new KVStorageEngine(new Pmse(params.dbpath), options);
+        return new KVStorageEngine(new PmseEngine(params.dbpath), options);
     }
 
     virtual StringData getCanonicalName() const {
