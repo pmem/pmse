@@ -172,6 +172,8 @@ PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper) {
 }
 
 boost::optional<Record> PmseRecordCursor::next() {
+    if(_eof)
+        return boost::none;
     if(_cur != nullptr) {
         if(_cur->next != nullptr) {
             _cur = _cur->next;
@@ -195,9 +197,10 @@ boost::optional<Record> PmseRecordCursor::next() {
             actual++;
         }
     }
-    if(_cur == nullptr)
-        return {};
-
+    if(_cur == nullptr) {
+        _eof = true;
+        return boost::none;
+    }
     RecordId a((int64_t) _cur->idValue);
     RecordData b(_cur->ptr->data, _cur->ptr->size);
     return { {a,b}};
@@ -205,14 +208,14 @@ boost::optional<Record> PmseRecordCursor::next() {
 
 boost::optional<Record> PmseRecordCursor::seekExact(const RecordId& id) {
     persistent_ptr<InitData> obj = nullptr;
-    bool status = _mapper->find(id.repr(), obj);
+    bool status = _mapper->getPair(id.repr(), _cur);
+    obj = _cur->ptr;
     if (!status || !obj) {
-        return {};
+        return boost::none;
     }
-
     RecordId a(id.repr());
     RecordData b(obj->data, obj->size);
-    return { {a,b}};
+    return {{a,b}};
 }
 }
 
