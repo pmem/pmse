@@ -140,6 +140,7 @@ public:
     }
 
     void initialize(bool firstRun) {
+        pop = pool_by_vptr(this);
         for(int i = 0; i < _size; i++) {
             if (firstRun) {
                 try {
@@ -163,6 +164,7 @@ public:
 private:
     const int _size;
     const bool _isCapped;
+    pool_base pop;
     p<uint64_t> _counter = 0;
     p<uint64_t> _hashmapSize = 0;
     p<uint64_t> _maxDocuments;
@@ -176,13 +178,12 @@ private:
             return _list[listNumber]->head;
         return {};
     }
+
     persistent_ptr<KVPair> getNextId() {
         persistent_ptr<KVPair> temp = nullptr;
         if(_deleted == nullptr) {
             if(_counter != std::numeric_limits<uint64_t>::max()-1) {
                 this->_counter++;
-                pool_base pop;
-                pop = pool_by_vptr(this);
                 try {
                     transaction::exec_tx(pop, [&] {
                         temp = make_persistent<KVPair>();
