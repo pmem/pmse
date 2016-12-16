@@ -123,6 +123,16 @@ public:
         return false;
     }
 
+    bool getPair(uint64_t id, persistent_ptr<KVPair> &value) {
+        persistent_ptr<KVPair> obj;
+        if (_list[id % _size]->getPair(id, obj)) {
+            value = obj;
+            return true;
+        }
+        value = nullptr;
+        return false;
+    }
+
     bool remove(uint64_t id) {
         _list[id % _size]->deleteKV(id, _deleted);
         _hashmapSize--;
