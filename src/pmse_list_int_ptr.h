@@ -77,6 +77,7 @@ public:
     void insertKV_capped(persistent_ptr<KVPair> &key, persistent_ptr<InitData> &value,
                          bool isCapped, uint64_t maxDoc, uint64_t sizeOfColl);
     bool find(uint64_t key, persistent_ptr<InitData> &item_ptr);
+    bool getPair(uint64_t key, persistent_ptr<KVPair> &item_ptr);
     void update(uint64_t key, persistent_ptr<InitData> &value);
     void deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted);
     bool hasKey(uint64_t key);
