@@ -52,8 +52,17 @@ namespace mongo {
 
 Status Pmse::createRecordStore(OperationContext* opCtx, StringData ns, StringData ident,
                                   const CollectionOptions& options) {
-    identList->insertKV(ident.toString().c_str(), ns.toString().c_str());
-    return Status::OK();
+    auto status = Status::OK();
+    try {
+        auto record_store = stdx::make_unique<PmseRecordStore>(ns, options, _DBPATH);
+        identList->insertKV(ident.toString().c_str(), ns.toString().c_str());
+
+    } catch(std::exception &e) {
+        std::cout << "Create record store error: " << e.what() << std::endl;
+        status = Status(ErrorCodes::BadValue, "Persistent memory exhausted");
+    }
+
+    return status;
 }
 
 std::unique_ptr<RecordStore> Pmse::getRecordStore(OperationContext* opCtx,
@@ -72,7 +81,7 @@ Status Pmse::createSortedDataInterface(OperationContext* opCtx,
 SortedDataInterface* Pmse::getSortedDataInterface(OperationContext* opCtx,
                                                      StringData ident,
                                                      const IndexDescriptor* desc) {
-    return new PmseSortedDataInterface(ident,desc, _DBPATH);
+    return new PmseSortedDataInterface(ident, desc, _DBPATH);
 }
 
 Status Pmse::dropIdent(OperationContext* opCtx, StringData ident) {
