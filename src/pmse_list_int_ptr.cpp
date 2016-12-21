@@ -202,7 +202,7 @@ bool PmseListIntPtr::find(uint64_t key, persistent_ptr<InitData> &item_ptr) {
         }
     }
     item_ptr = nullptr;
-    return 0;
+    return false;
 }
 
 bool PmseListIntPtr::getPair(uint64_t key, persistent_ptr<KVPair> &item_ptr) {
@@ -213,7 +213,7 @@ bool PmseListIntPtr::getPair(uint64_t key, persistent_ptr<KVPair> &item_ptr) {
         }
     }
     item_ptr = nullptr;
-    return 0;
+    return false;
 }
 
 void PmseListIntPtr::update(uint64_t key, persistent_ptr<InitData> &value) {

@@ -129,7 +129,6 @@ public:
             value = obj;
             return true;
         }
-        value = nullptr;
         return false;
     }
 
@@ -198,8 +197,6 @@ private:
         } else {
             temp = _deleted;
             uint64_t id = 0;
-            pool_base pop;
-            pop = pool_by_vptr(this);
             id = _deleted->idValue;
             _deleted = _deleted->next;
             return temp;
