@@ -58,8 +58,7 @@ Status PmseEngine::createRecordStore(OperationContext* opCtx, StringData ns, Str
         identList->insertKV(ident.toString().c_str(), ns.toString().c_str());
 
     } catch(std::exception &e) {
-        std::cout << "Create record store error: " << e.what() << std::endl;
-        status = Status(ErrorCodes::BadValue, "Persistent memory exhausted");
+        status = Status(ErrorCodes::BadValue, e.what());
     }
     return status;
 }
