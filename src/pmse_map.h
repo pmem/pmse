@@ -114,22 +114,11 @@ public:
     }
 
     bool find(uint64_t id, persistent_ptr<T> &value) {
-        persistent_ptr<InitData> obj;
-        if (_list[id % _size]->find(id, obj)) {
-            value = obj;
-            return true;
-        }
-        value = nullptr;
-        return false;
+        return _list[id % _size]->find(id, value);
     }
 
     bool getPair(uint64_t id, persistent_ptr<KVPair> &value) {
-        persistent_ptr<KVPair> obj;
-        if (_list[id % _size]->getPair(id, obj)) {
-            value = obj;
-            return true;
-        }
-        return false;
+        return _list[id % _size]->getPair(id, value);
     }
 
     bool remove(uint64_t id) {
