@@ -209,6 +209,9 @@ boost::optional<Record> PmseRecordCursor::next() {
 boost::optional<Record> PmseRecordCursor::seekExact(const RecordId& id) {
     persistent_ptr<InitData> obj = nullptr;
     bool status = _mapper->getPair(id.repr(), _cur);
+    if(_cur == nullptr || _cur->ptr == nullptr) {
+        return boost::none;
+    }
     obj = _cur->ptr;
     if (!status || !obj) {
         return boost::none;
