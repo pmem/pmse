@@ -220,5 +220,55 @@ boost::optional<Record> PmseRecordCursor::seekExact(const RecordId& id) {
     RecordData b(obj->data, obj->size);
     return {{a,b}};
 }
+
+void PmseRecordCursor::save() {
+    auto temp = _cur;
+    auto row = actual;
+    if(temp != nullptr) {
+        if(temp->next != nullptr) {
+            temp = temp->next;
+        } else {
+            temp = nullptr;
+            while(temp == nullptr && ++row < _mapper->_size) {
+                persistent_ptr<KVPair> head = _mapper->getFirstPtr(row);
+                if(head != nullptr) {
+                    temp = head;
+                    break;
+                }
+            }
+        }
+    } else {
+        while(temp == nullptr && row < _mapper->_size) {
+            persistent_ptr<KVPair> head = _mapper->getFirstPtr(row);
+            if(head != nullptr) {
+                temp = head;
+                break;
+            }
+            row++;
+        }
+    }
+    _restorePoint = temp;
+}
+
+bool PmseRecordCursor::restore() {
+    if(_eof)
+        return true;
+    if(_restorePoint == nullptr) {
+        _eof = true;
+        return true;
+    }
+    if(_cur == nullptr) {
+        _cur = _restorePoint;
+        return true;
+    }
+    if(!_mapper->hasId(_cur->idValue)) {
+        _cur = _restorePoint;
+    }
+    return true;
+}
+
+void PmseRecordCursor::saveUnpositioned() {
+    _eof = true;
+}
 }
 
