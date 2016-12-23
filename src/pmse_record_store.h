@@ -63,59 +63,15 @@ public:
 
     boost::optional<Record> seekExact(const RecordId& id) final;
 
-    void save() final {
-        auto temp = _cur;
-        auto row = actual;
-        if(temp != nullptr) {
-            if(temp->next != nullptr) {
-                temp = temp->next;
-            } else {
-                temp = nullptr;
-                while(temp == nullptr && ++row < _mapper->_size) {
-                    persistent_ptr<KVPair> head = _mapper->getFirstPtr(row);
-                    if(head != nullptr) {
-                        temp = head;
-                        break;
-                    }
-                }
-            }
-        } else {
-            while(temp == nullptr && row < _mapper->_size) {
-                persistent_ptr<KVPair> head = _mapper->getFirstPtr(row);
-                if(head != nullptr) {
-                    temp = head;
-                    break;
-                }
-                row++;
-            }
-        }
-        _restorePoint = temp;
-    }
+    void save() final;
 
-    bool restore() final {
-        if(_eof)
-            return true;
-        if(_restorePoint == nullptr) {
-            _eof = true;
-            return true;
-        }
-        if(_cur == nullptr) {
-            _cur = _restorePoint;
-            return true;
-        }
-        if(!_mapper->hasId(_cur->idValue)) {
-            _cur = _restorePoint;
-        }
-        return true;
-    }
+    bool restore() final;
 
     void detachFromOperationContext() final {}
 
     void reattachToOperationContext(OperationContext* txn) final {}
 
-    void saveUnpositioned() {
-        _eof = true;
-    }
+    void saveUnpositioned();
 private:
     persistent_ptr<PmseMap<InitData>> _mapper;
     persistent_ptr<KVPair> _cur;
