@@ -174,7 +174,7 @@ public:
     }
 
     virtual Status truncate(OperationContext* txn) {
-        std::cout << "truncate" << std::endl;
+        mapper->truncate();
         return Status::OK();
     }
 
@@ -217,6 +217,7 @@ public:
     }
 
 private:
+    CappedCallback* _cappedCallback;
     CollectionOptions _options;
     long long _numInserts;
     const StringData _DBPATH;

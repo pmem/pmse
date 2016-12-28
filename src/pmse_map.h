@@ -149,6 +149,22 @@ public:
         return _hashmapSize;
     }
 
+    bool truncate() {
+        transaction::exec_tx(pop, [&] {
+            for(int i = 0; i < _size; i++) {
+                _list[i]->clear();
+                delete_persistent<PmseListIntPtr>(_list[i]);
+            }
+            initialize(true);
+        });
+        _counter = 0;
+        _hashmapSize = 0;
+        _maxDocuments = 0;
+        _sizeOfCollection = 0;
+        _counterCapped = 0;
+        return true;
+    }
+
 private:
     const int _size;
     const bool _isCapped;
