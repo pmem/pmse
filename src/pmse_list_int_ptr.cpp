@@ -238,7 +238,7 @@ void PmseListIntPtr::clear() {
     if (!head)
         return;
     transaction::exec_tx(pop, [&] {
-        for(auto rec = head; rec != nullptr; rec = rec->next) {
+        for(auto rec = head; rec != nullptr;) {
             auto temp = rec->next;
             delete_persistent<KVPair>(rec);
             rec = temp;
