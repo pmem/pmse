@@ -98,8 +98,11 @@ public:
     std::unique_ptr<SortedDataInterface::Cursor> newCursor(
                     OperationContext* txn, bool isForward) const;
 
+
+
 private:
     int _records = 0;
+    void moveToNext();
     StringData filepath;
     pool<PmseTree> pm_pool;
     persistent_ptr<PmseTree> tree;
