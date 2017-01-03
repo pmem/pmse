@@ -36,6 +36,9 @@
 
 #include "libpmem.h"
 #include "libpmemobj.h"
+#include <libpmemobj++/p.hpp>
+#include <libpmemobj++/pext.hpp>
+#include <libpmemobj++/utils.hpp>
 
 #include "mongo/platform/basic.h"
 #include "mongo/db/catalog/collection_options.h"
@@ -100,8 +103,7 @@ public:
     virtual void setCappedCallback(CappedCallback*);
 
     virtual long long dataSize(OperationContext* txn) const {
-        // TODO: Implement returning size
-        return 0;
+        return mapper->dataSize();
     }
 
     virtual long long numRecords(OperationContext* txn) const {
@@ -116,7 +118,7 @@ public:
                                 BSONObjBuilder* extraInfo = NULL,
                                 int infoLevel = 0) const {
         // TODO: Implement storageSize
-        return 0;
+        return _storageSize;
     }
 
     virtual bool findRecord(OperationContext* txn, const RecordId& loc,
@@ -218,6 +220,7 @@ public:
 
 private:
     CappedCallback* _cappedCallback;
+    int64_t _storageSize = 20480;
     CollectionOptions _options;
     long long _numInserts;
     const StringData _DBPATH;

@@ -79,7 +79,7 @@ public:
     bool find(uint64_t key, persistent_ptr<InitData> &item_ptr);
     bool getPair(uint64_t key, persistent_ptr<KVPair> &item_ptr);
     void update(uint64_t key, persistent_ptr<InitData> &value);
-    void deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted);
+    int64_t deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted);
     bool hasKey(uint64_t key);
     void clear();
     void setPool();

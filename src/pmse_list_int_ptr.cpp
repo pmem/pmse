@@ -143,8 +143,9 @@ void PmseListIntPtr::insertKV_capped(persistent_ptr<KVPair> &key,
     }
 }
 
-void PmseListIntPtr::deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted) {
+int64_t PmseListIntPtr::deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted) {
     auto before = head;
+    int64_t sizeFreed = 0;
     for (auto rec = head; rec != nullptr; rec = rec->next) {
         if (rec->idValue == key) {
             transaction::exec_tx(pop, [&] {
@@ -176,6 +177,7 @@ void PmseListIntPtr::deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted) {
                     rec->next = nullptr;
                     deleted = rec;
                 }
+                sizeFreed = pmemobj_alloc_usable_size(deleted->ptr.raw());
                 delete_persistent<InitData>(deleted->ptr);
             });
             break;
@@ -183,6 +185,7 @@ void PmseListIntPtr::deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted) {
             before = rec;
         }
     }
+    return sizeFreed;
 }
 
 bool PmseListIntPtr::hasKey(uint64_t key) {

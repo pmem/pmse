@@ -124,6 +124,9 @@ StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
     if(!id)
         return StatusWith<RecordId>(ErrorCodes::OperationFailed,
                                     "Null record Id!");
+    while(mapper->dataSize() > _storageSize) {
+        _storageSize =  _storageSize + 20480;
+    }
     return StatusWith<RecordId>(RecordId(id));
 }
 
@@ -142,6 +145,9 @@ Status PmseRecordStore::updateRecord(
     } catch (std::exception &e) {
         std::cout << e.what() << std::endl;
         return Status(ErrorCodes::BadValue, e.what());
+    }
+    while(mapper->dataSize() > _storageSize) {
+        _storageSize =  _storageSize + 20480;
     }
     return Status::OK();
 }
