@@ -97,12 +97,15 @@ public:
                 return false;
             }
         }
+        _dataSize += pmemobj_alloc_usable_size(value.raw());
         return true; //correctly added
     }
 
     bool updateKV(uint64_t id, persistent_ptr<T> value) {
-        if (hasId(id)) {
+        persistent_ptr<T> temp;
+        if (find(id, temp)) {
             _list[id % _size]->update(id, value);
+            _dataSize += pmemobj_alloc_usable_size(value.raw()) - pmemobj_alloc_usable_size(temp.raw());
         } else {
             return false;
         }
@@ -165,10 +168,14 @@ public:
         return true;
     }
 
+    int64_t dataSize() {
+        return _dataSize;
+    }
 private:
     const int _size;
     const bool _isCapped;
     pool_base pop;
+    p<int64_t> _dataSize = 0;
     p<uint64_t> _counter = 0;
     p<uint64_t> _hashmapSize = 0;
     p<uint64_t> _maxDocuments;
