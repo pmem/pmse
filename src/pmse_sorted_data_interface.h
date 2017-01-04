@@ -71,6 +71,7 @@ public:
     virtual void fullValidate(OperationContext* txn,
                               long long* numKeysOut,
                               ValidateResults* fullResults) const {
+        *numKeysOut = _records;
         // TODO: Implement fullValidate
     }
 
@@ -87,7 +88,7 @@ public:
 
     virtual bool isEmpty(OperationContext* txn) {
         // TODO: Implement isEmpty method
-        return true;
+        return _records == 0 ? true : false;
     }
 
     virtual Status initAsEmpty(OperationContext* txn) {
@@ -99,6 +100,7 @@ public:
                     OperationContext* txn, bool isForward) const;
 
 private:
+    int _records = 0;
     StringData filepath;
     pool<PmseTree> pm_pool;
     persistent_ptr<PmseTree> tree;

@@ -176,7 +176,9 @@ public:
     }
 
     virtual Status truncate(OperationContext* txn) {
-        mapper->truncate();
+        if(!mapper->truncate()) {
+            return Status(ErrorCodes::OperationFailed, "Truncate error");
+        }
         return Status::OK();
     }
 
@@ -192,7 +194,14 @@ public:
 
     virtual void appendCustomStats(OperationContext* txn,
                                    BSONObjBuilder* result, double scale) const {
-        result->appendNumber("numInserts", _numInserts);
+        if(mapper->isCapped()) {
+            result->appendNumber("capped", true);
+            result->appendNumber("maxSize", mapper->getMax() / scale);
+            result->appendNumber("max", mapper->getMaxSize());
+        } else {
+            result->appendNumber("capped", false);
+        }
+        result->appendNumber("numInserts", mapper->fillment());
     }
 
     virtual Status touch(OperationContext* txn, BSONObjBuilder* output) const {
@@ -215,6 +224,7 @@ public:
                             ValidateResults* results,
                             BSONObjBuilder* output) {
         // TODO: Implement validate
+        output->appendNumber("nrecords", mapper->fillment());
         return Status::OK();
     }
 
