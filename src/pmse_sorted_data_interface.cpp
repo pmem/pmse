@@ -757,7 +757,7 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
 
                     });
     bsonPM.data = obj;
-
+    ++_records;
     return tree->insert(pop, bsonPM, loc, _desc->keyPattern(), dupsAllowed);
 }
 
@@ -769,6 +769,7 @@ void PmseSortedDataInterface::unindex(OperationContext* txn,
                                          const RecordId& loc,
                                          bool dupsAllowed) {
     BSONObj owned = key.getOwned();
+    --_records;
     tree->remove(pm_pool, owned, loc, dupsAllowed);
 
 }

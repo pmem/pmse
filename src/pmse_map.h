@@ -46,6 +46,7 @@
 #include <libpmemobj++/pool.hpp>
 #include <libpmemobj++/persistent_ptr.hpp>
 #include <libpmemobj++/make_persistent_array.hpp>
+#include <libpmemobj++/detail/pexceptions.hpp>
 
 using namespace nvml::obj;
 
@@ -153,23 +154,45 @@ public:
     }
 
     bool truncate() {
-        transaction::exec_tx(pop, [&] {
-            for(int i = 0; i < _size; i++) {
-                _list[i]->clear();
-                delete_persistent<PmseListIntPtr>(_list[i]);
-            }
-            initialize(true);
-        });
-        _counter = 0;
-        _hashmapSize = 0;
-        _maxDocuments = 0;
-        _sizeOfCollection = 0;
-        _counterCapped = 0;
-        return true;
+        bool status = true;
+        try {
+            transaction::exec_tx(pop, [&] {
+                for(int i = 0; i < _size; i++) {
+                    _list[i]->clear();
+                    delete_persistent<PmseListIntPtr>(_list[i]);
+                }
+                initialize(true);
+            });
+            _counter = 0;
+            _hashmapSize = 0;
+            _maxDocuments = 0;
+            _sizeOfCollection = 0;
+            _counterCapped = 0;
+            _dataSize = 0;
+        } catch (nvml::transaction_alloc_error &e) {
+            std::cout << e.what() << std::endl;
+            status = false;
+        } catch (nvml::transaction_scope_error &e) {
+            std::cout << e.what() << std::endl;
+            status = false;
+        }
+        return status;
     }
 
     int64_t dataSize() {
         return _dataSize;
+    }
+
+    bool isCapped() const {
+        return _isCapped;
+    }
+
+    uint64_t getMax() const {
+        return _sizeOfCollection;
+    }
+
+    uint64_t getMaxSize() const {
+        return _maxDocuments;
     }
 private:
     const int _size;
