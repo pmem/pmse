@@ -52,6 +52,7 @@ namespace mongo {
 
 namespace {
 const std::string storeName = "pmse";
+const uint64_t baseSize = 20480;
 }
 
 struct root {
@@ -117,7 +118,6 @@ public:
     virtual int64_t storageSize(OperationContext* txn,
                                 BSONObjBuilder* extraInfo = NULL,
                                 int infoLevel = 0) const {
-        // TODO: Implement storageSize
         return _storageSize;
     }
 
@@ -230,7 +230,7 @@ public:
 
 private:
     CappedCallback* _cappedCallback;
-    int64_t _storageSize = 20480;
+    int64_t _storageSize = baseSize;
     CollectionOptions _options;
     long long _numInserts;
     const StringData _DBPATH;

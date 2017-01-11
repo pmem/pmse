@@ -125,7 +125,7 @@ StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
         return StatusWith<RecordId>(ErrorCodes::OperationFailed,
                                     "Null record Id!");
     while(mapper->dataSize() > _storageSize) {
-        _storageSize =  _storageSize + 20480;
+        _storageSize =  _storageSize + baseSize;
     }
     return StatusWith<RecordId>(RecordId(id));
 }
