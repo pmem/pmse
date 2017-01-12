@@ -144,12 +144,10 @@ private:
                              const RecordId& loc, const BSONObj& _ordering);
     /*persistent_ptr<PmseTreeNode> find(persistent_ptr<PmseTreeNode> node, BSONObj_PM& key,
      const BSONObj& _ordering);*/
-    persistent_ptr<PmseTreeNode> locateLeafWithKey(
-                    persistent_ptr<PmseTreeNode> node, BSONObj& key,
-                    const BSONObj& _ordering);
-    persistent_ptr<PmseTreeNode> locateLeafWithKeyPM(
-                    persistent_ptr<PmseTreeNode> node, BSONObj_PM& key,
-                    const BSONObj& _ordering);
+    persistent_ptr<PmseTreeNode> locateLeafWithKey(BSONObj& key,
+                                                   const BSONObj& _ordering);
+    persistent_ptr<PmseTreeNode> locateLeafWithKeyPM(BSONObj_PM& key,
+                                                     const BSONObj& _ordering);
     persistent_ptr<PmseTreeNode> splitFullNodeAndInsert(
                     pool_base pop, persistent_ptr<PmseTreeNode> node,
                     BSONObj_PM& key, const RecordId& loc,

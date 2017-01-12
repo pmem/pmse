@@ -32,17 +32,8 @@
 
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
 
-#include "mongo/platform/basic.h"
-#include "mongo/db/storage/sorted_data_interface.h"
-#include "mongo/util/log.h"
-#include "mongo/stdx/memory.h"
-
 #include "pmse_tree.h"
 #include "pmse_sorted_data_interface.h"
-
-#include "errno.h"
-#include "libpmemobj++/transaction.hpp"
-#include "libpmemobj++/make_persistent_array.hpp"
 
 namespace mongo {
 
@@ -56,8 +47,12 @@ void PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
     int64_t cmp;
     _ordering = ordering;
 
+    if (!root) {
+        return;
+    }
+
     //find node with key
-    node = locateLeafWithKey(root, key, _ordering);
+    node = locateLeafWithKey(key, _ordering);
     //find place in node
     for (i = 0; i < node->num_keys; i++) {
         key_record = node->values_array[i];
@@ -519,12 +514,11 @@ persistent_ptr<PmseTreeNode> PmseTree::removeEntryFromNode(
 }
 
 persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKey(
-                persistent_ptr<PmseTreeNode> node, BSONObj& key,
-                const BSONObj& _ordering) {
+                BSONObj& key, const BSONObj& _ordering) {
     uint64_t i;
     int64_t cmp;
     bool wasEqual = false;
-    persistent_ptr<PmseTreeNode> current = node;
+    auto current = root;
 
     if (current == nullptr)
         return current;
@@ -568,12 +562,11 @@ persistent_ptr<PmseTreeNode> PmseTree::makeTreeRoot(BSONObj_PM& key,
 }
 
 persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
-                persistent_ptr<PmseTreeNode> node, BSONObj_PM& key,
-                const BSONObj& _ordering) {
+                BSONObj_PM& key, const BSONObj& _ordering) {
     uint64_t i;
     int64_t cmp;
     bool wasEqual = false;
-    persistent_ptr<PmseTreeNode> current = node;
+    auto current = root;
 
     if (current == nullptr)
         return current;
@@ -871,8 +864,7 @@ persistent_ptr<PmseTreeNode> PmseTree::insertIntoNodeParent(
 persistent_ptr<PmseTreeNode> PmseTree::allocateNewRoot(
                 pool_base pop, persistent_ptr<PmseTreeNode> left,
                 BSONObj_PM& new_key, persistent_ptr<PmseTreeNode> right) {
-    persistent_ptr<PmseTreeNode> new_root;
-    new_root = make_persistent<PmseTreeNode>(false);
+    auto new_root = make_persistent<PmseTreeNode>(false);
 
     new_root->keys[0].data = new_key.data;
     new_root->children_array[0] = left;
@@ -904,7 +896,7 @@ Status PmseTree::insert(pool_base pop, BSONObj_PM& key, const RecordId& loc,
         }
         return Status::OK();
     }
-    node = locateLeafWithKeyPM(root, key, _ordering);
+    node = locateLeafWithKeyPM(key, _ordering);
     /*
      * There is place for new value
      */
