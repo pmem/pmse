@@ -727,7 +727,7 @@ PmseSortedDataInterface::PmseSortedDataInterface(
 
     if (access(filename.c_str(), F_OK) != 0) {
         pm_pool = pool<PmseTree>::create(filename.c_str(), "pmStore",
-                        10 * PMEMOBJ_MIN_POOL, 0666);
+                        18 * PMEMOBJ_MIN_POOL, 0666);
     } else {
         pm_pool = pool<PmseTree>::open(filename.c_str(), "pmStore");
 
@@ -749,16 +749,13 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
 
     persistent_ptr<char> obj;
 
-    auto pop = pool_base(pm_pool);
-    transaction::exec_tx(pop,
-                    [&] {
-                        obj = pmemobj_tx_alloc(owned.objsize(), 1);
-                        memcpy( (void*)obj.get(), owned.objdata(), owned.objsize());
-
-                    });
-    bsonPM.data = obj;
-    ++_records;
-    return tree->insert(pop, bsonPM, loc, _desc->keyPattern(), dupsAllowed);
+    transaction::exec_tx(pm_pool, [&] {
+        obj = pmemobj_tx_alloc(owned.objsize(), 1);
+        memcpy( (void*)obj.get(), owned.objdata(), owned.objsize());
+        bsonPM.data = obj;
+        ++_records;
+    });
+    return tree->insert(pm_pool, bsonPM, loc, _desc->keyPattern(), dupsAllowed);
 }
 
 /*

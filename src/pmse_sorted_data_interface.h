@@ -87,7 +87,6 @@ public:
     }
 
     virtual bool isEmpty(OperationContext* txn) {
-        // TODO: Implement isEmpty method
         return _records == 0 ? true : false;
     }
 
