@@ -72,7 +72,9 @@ PmseRecordStore::PmseRecordStore(StringData ns,
     if (!boost::filesystem::exists(mapper_filename.c_str())) {
         std::cout << "Mapper create pool..." << std::endl;
         mapPool = pool<root>::create(mapper_filename, "kvmapper",
-                        80 * PMEMOBJ_MIN_POOL);
+                                     (ns.toString() == "local.startup_log" ||
+                                      ns.toString() == "_mdb_catalog" ? 10 : 80)
+                                     * PMEMOBJ_MIN_POOL);
         std::cout << "Create pool end" << std::endl;
     } else {
         std::cout << "Open pool..." << std::endl;
@@ -147,7 +149,7 @@ Status PmseRecordStore::updateRecord(
         return Status(ErrorCodes::BadValue, e.what());
     }
     while(mapper->dataSize() > _storageSize) {
-        _storageSize =  _storageSize + 20480;
+        _storageSize =  _storageSize + baseSize;
     }
     return Status::OK();
 }
