@@ -66,6 +66,7 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
 
     BSONObj_PM bsonPM;
     BSONObj owned = key.getOwned();
+    Status status = Status::OK();
 
     persistent_ptr<char> obj;
 
@@ -75,12 +76,14 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
                             obj = pmemobj_tx_alloc(owned.objsize(), 1);
                             memcpy( (void*)obj.get(), owned.objdata(), owned.objsize());
                         });
-    } catch (std::exception &e) {
-        std::cout << e.what() << std::endl;
-    }
-    bsonPM.data = obj;
 
-    return tree->insert(pm_pool, bsonPM, loc, _desc->keyPattern(), dupsAllowed);
+    bsonPM.data = obj;
+    status = tree->insert(pm_pool, bsonPM, loc, _desc->keyPattern(), dupsAllowed);
+    ++_records;
+    } catch (std::exception &e) {
+            std::cout << e.what() << std::endl;
+    }
+    return status;
 }
 
 /*
@@ -91,11 +94,10 @@ void PmseSortedDataInterface::unindex(OperationContext* txn, const BSONObj& key,
     BSONObj owned = key.getOwned();
     try {
         transaction::exec_tx(pm_pool,
-                        [&] {
-                            tree->remove(pm_pool, owned, loc, dupsAllowed, _desc->keyPattern());
-                        });
-    --_records;
-
+        [&] {
+            tree->remove(pm_pool, owned, loc, dupsAllowed, _desc->keyPattern());
+        });
+        --_records;
     } catch (std::exception &e) {
         std::cout << e.what() << std::endl;
     }
