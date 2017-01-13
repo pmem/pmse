@@ -80,7 +80,7 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
     }
     bsonPM.data = obj;
 
-    return tree->insert(pop, bsonPM, loc, _desc->keyPattern(), dupsAllowed);
+    return tree->insert(pm_pool, bsonPM, loc, _desc->keyPattern(), dupsAllowed);
 }
 
 /*
