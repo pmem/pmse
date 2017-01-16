@@ -51,10 +51,12 @@ namespace mongo {
 class PmseSortedDataInterface : public SortedDataInterface {
 public:
 
-    PmseSortedDataInterface(StringData ident, const IndexDescriptor* desc, StringData dbpath);
+    PmseSortedDataInterface(StringData ident, const IndexDescriptor* desc,
+                            StringData dbpath);
 
     virtual SortedDataBuilderInterface* getBulkBuilder(OperationContext* txn,
-    bool dupsAllowed) override;
+                                                       bool dupsAllowed)
+                                                                       override;
 
     virtual Status insert(OperationContext* txn, const BSONObj& key,
                           const RecordId& loc, bool dupsAllowed);
@@ -68,8 +70,7 @@ public:
         return Status::OK();
     }
 
-    virtual void fullValidate(OperationContext* txn,
-                              long long* numKeysOut,
+    virtual void fullValidate(OperationContext* txn, long long* numKeysOut,
                               ValidateResults* fullResults) const {
         *numKeysOut = _records;
         // TODO: Implement fullValidate
@@ -99,7 +100,8 @@ public:
                     OperationContext* txn, bool isForward) const;
 
 private:
-    int _records = 0;
+    void moveToNext();
+    p<int> _records;
     StringData filepath;
     pool<PmseTree> pm_pool;
     persistent_ptr<PmseTree> tree;
