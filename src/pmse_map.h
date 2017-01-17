@@ -150,6 +150,8 @@ public:
     }
 
     uint64_t fillment() {
+        if(_isCapped)
+            return _list[0]->size();
         return _hashmapSize;
     }
 
