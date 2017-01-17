@@ -75,15 +75,15 @@ PmseRecordStore::PmseRecordStore(StringData ns,
                                      (ns.toString() == "local.startup_log" ||
                                       ns.toString() == "_mdb_catalog" ? 10 : 80)
                                      * PMEMOBJ_MIN_POOL);
-        std::cout << "Create pool end" << std::endl;
+        log() << "Create pool end";
     } else {
-        std::cout << "Open pool..." << std::endl;
+        log() << "Open pool...";
         try {
             mapPool = pool<root>::open(mapper_filename, "kvmapper");
         } catch (std::exception &e) {
-            std::cout << "Error handled: " << e.what() << std::endl;
+            log() << "Error handled: " << e.what();
         }
-        std::cout << "Open pool end..." << std::endl;
+        log() << "Open pool end...";
     }
     auto mapper_root = mapPool.get_root();
 
@@ -101,7 +101,7 @@ PmseRecordStore::PmseRecordStore(StringData ns,
         mapper = mapPool.get_root()->kvmap_root_ptr;
 
     } catch (std::exception& e) {
-        std::cout << "Error while creating PMStore engine" << std::endl;
+        log() << "Error while creating PMStore engine";
     };
 }
 
@@ -174,7 +174,7 @@ bool PmseRecordStore::findRecord(OperationContext* txn, const RecordId& loc,
     return false;
 }
 
-PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper) {
+PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper) : _needToBeRestored(false) {
     _mapper = mapper;
     _cur = nullptr;
 }
@@ -182,28 +182,33 @@ PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper) {
 boost::optional<Record> PmseRecordCursor::next() {
     if(_eof)
         return boost::none;
-    if(_cur != nullptr) {
-        if(_cur->next != nullptr) {
-            _cur = _cur->next;
-        } else {
-            _cur = nullptr;
-            while(_cur == nullptr && ++actual < _mapper->_size) {
+    if(!_needToBeRestored) {
+        if(_cur != nullptr) {
+            if(_cur->next != nullptr) {
+                _cur = _cur->next;
+            } else {
+                _cur = nullptr;
+                while(_cur == nullptr && actual < _mapper->_size) {
+                    actual++;
+                    persistent_ptr<KVPair> head = _mapper->getFirstPtr(actual);
+                    if(head != nullptr) {
+                        _cur = head;
+                        break;
+                    }
+                }
+            }
+        } else { //_cur == nullptr
+            while(_cur == nullptr && actual < _mapper->_size) {
                 persistent_ptr<KVPair> head = _mapper->getFirstPtr(actual);
                 if(head != nullptr) {
                     _cur = head;
                     break;
                 }
+                actual++;
             }
         }
     } else {
-        while(_cur == nullptr && actual < _mapper->_size) {
-            persistent_ptr<KVPair> head = _mapper->getFirstPtr(actual);
-            if(head != nullptr) {
-                _cur = head;
-                break;
-            }
-            actual++;
-        }
+        _needToBeRestored = false;
     }
     if(_cur == nullptr) {
         _eof = true;
@@ -256,6 +261,7 @@ void PmseRecordCursor::save() {
         }
     }
     _restorePoint = temp;
+    _actualAfterRestore = row;
 }
 
 bool PmseRecordCursor::restore() {
@@ -271,6 +277,8 @@ bool PmseRecordCursor::restore() {
     }
     if(!_mapper->hasId(_cur->idValue)) {
         _cur = _restorePoint;
+        _needToBeRestored = true;
+        actual = _actualAfterRestore;
     }
     return true;
 }

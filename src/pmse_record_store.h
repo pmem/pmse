@@ -82,7 +82,9 @@ private:
     persistent_ptr<KVPair> _cur;
     persistent_ptr<KVPair> _restorePoint;
     p<bool> _eof = false;
+    p<bool> _needToBeRestored;
     p<int> actual = 0;
+    p<int> _actualAfterRestore = 0;
     PMEMoid _currentOid = OID_NULL;
 };
 
