@@ -96,9 +96,9 @@ void PmseListIntPtr::insertKV_capped(persistent_ptr<KVPair> &key,
                     isSpace = BLOCKED;
                 else
                     isSpace = NO;
-            }
-            else
+            } else {
                 isSpace = YES;
+            }
 
             if(head != nullptr) {
                 if(_size == maxDoc || isSpace == NO) {
