@@ -43,7 +43,9 @@
 
 #include "mongo/platform/basic.h"
 #include "mongo/db/catalog/collection_options.h"
+#include "mongo/db/storage/capped_callback.h"
 #include "mongo/stdx/memory.h"
+
 
 #include "pmse_map.h"
 
@@ -82,6 +84,7 @@ private:
     persistent_ptr<KVPair> _cur;
     persistent_ptr<KVPair> _restorePoint;
     p<bool> _eof = false;
+    p<bool> _isCapped;
     p<int> actual = 0;
     PMEMoid _currentOid = OID_NULL;
 };
@@ -89,7 +92,7 @@ private:
 class PmseRecordStore : public RecordStore {
 public:
     PmseRecordStore(StringData ns, const CollectionOptions& options,
-                       StringData dbpath);
+                    StringData dbpath);
     ~PmseRecordStore() {
         try {
             mapPool.close();
@@ -102,7 +105,7 @@ public:
         return storeName.c_str();
     }
 
-    virtual void setCappedCallback(CappedCallback*);
+    virtual void setCappedCallback(CappedCallback* cb);
 
     virtual long long dataSize(OperationContext* txn) const {
         return mapper->dataSize();
@@ -155,10 +158,10 @@ public:
     }
 
     virtual Status updateRecord(OperationContext* txn,
-                                              const RecordId& oldLocation,
-                                              const char* data, int len,
-                                              bool enforceQuota,
-                                              UpdateNotifier* notifier);
+                                const RecordId& oldLocation,
+                                const char* data, int len,
+                                bool enforceQuota,
+                                UpdateNotifier* notifier);
 
     virtual bool updateWithDamagesSupported() const {
         return false;
@@ -184,8 +187,7 @@ public:
     }
 
     virtual void temp_cappedTruncateAfter(OperationContext* txn, RecordId end,
-                                          bool inclusive) {
-    }
+                                          bool inclusive);
 
     virtual Status validate(OperationContext* txn, bool full, bool scanData,
                             ValidateAdaptor* adaptor, ValidateResults* results,
@@ -237,6 +239,16 @@ private:
     const StringData _DBPATH;
     pool<root> mapPool;
     persistent_ptr<PmseMap<InitData>> mapper;
+    void deleteCappedAsNeeded(OperationContext* txn) {
+        while(mapper->isCapped() && mapper->removalIsNeeded()) {
+            uint64_t idToDelete = mapper->getCappedFirstId();
+            RecordId id(idToDelete);
+            RecordData data;
+            findRecord(txn, id, &data);
+            mapper->remove(idToDelete);
+            uassertStatusOK(_cappedCallback->aboutToDeleteCapped(txn, id, data));
+        }
+    }
 };
 }
 #endif /* SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_RECORD_STORE_H_ */

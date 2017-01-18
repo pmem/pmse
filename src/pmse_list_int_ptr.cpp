@@ -126,7 +126,7 @@ void PmseListIntPtr::insertKV_capped(persistent_ptr<KVPair> &key,
                     tail = key;
                     actualSizeOfCollecion = tempSize;
                 }
-            } else if(head == nullptr) {
+            } else {
                 head = key;
                 tail = head;
                 first = head;
