@@ -86,6 +86,7 @@ private:
     p<int> actual = 0;
     p<int> _actualAfterRestore = 0;
     PMEMoid _currentOid = OID_NULL;
+    void moveToNext(bool inNext = true);
 };
 
 class PmseRecordStore : public RecordStore {
