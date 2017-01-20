@@ -174,7 +174,7 @@ bool PmseRecordStore::findRecord(OperationContext* txn, const RecordId& loc,
     return false;
 }
 
-PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper) : _needToBeRestored(false) {
+PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper) : _lastMoveWasRestore(false) {
     _mapper = mapper;
     _cur = nullptr;
 }
@@ -218,10 +218,10 @@ void PmseRecordCursor::moveToNext(bool inNext) {
 boost::optional<Record> PmseRecordCursor::next() {
     if(_eof)
         return boost::none;
-    if(!_needToBeRestored) {
-        moveToNext();
+    if(_lastMoveWasRestore) {
+        _lastMoveWasRestore = false;
     } else {
-        _needToBeRestored = false;
+        moveToNext();
     }
     if(_cur == nullptr) {
         _eof = true;
@@ -264,7 +264,7 @@ bool PmseRecordCursor::restore() {
     }
     if(!_mapper->hasId(_cur->idValue)) {
         _cur = _restorePoint;
-        _needToBeRestored = true;
+        _lastMoveWasRestore = true;
         actual = _actualAfterRestore;
     }
     return true;
