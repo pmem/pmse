@@ -105,6 +105,14 @@ PmseRecordStore::PmseRecordStore(StringData ns,
     };
 }
 
+PmseRecordStore::~PmseRecordStore() {
+        try {
+            mapPool.close();
+        } catch (std::logic_error &e) {
+            log() << e.what();
+        }
+    }
+
 StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
                                                       const char* data, int len,
                                                       bool enforceQuota) {
@@ -178,6 +186,17 @@ bool PmseRecordStore::findRecord(OperationContext* txn, const RecordId& loc,
         return true;
     }
     return false;
+}
+
+void PmseRecordStore::deleteCappedAsNeeded(OperationContext* txn) {
+    while(mapper->isCapped() && mapper->removalIsNeeded()) {
+        uint64_t idToDelete = mapper->getCappedFirstId();
+        RecordId id(idToDelete);
+        RecordData data;
+        findRecord(txn, id, &data);
+        mapper->remove(idToDelete);
+        uassertStatusOK(_cappedCallback->aboutToDeleteCapped(txn, id, data));
+    }
 }
 
 PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper) {

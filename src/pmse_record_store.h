@@ -93,13 +93,8 @@ class PmseRecordStore : public RecordStore {
 public:
     PmseRecordStore(StringData ns, const CollectionOptions& options,
                     StringData dbpath);
-    ~PmseRecordStore() {
-        try {
-            mapPool.close();
-        } catch (std::logic_error &e) {
-            std::cout << e.what() << std::endl;
-        }
-    }
+
+    ~PmseRecordStore();
 
     virtual const char* name() const {
         return storeName.c_str();
@@ -232,6 +227,8 @@ public:
     }
 
 private:
+    void deleteCappedAsNeeded(OperationContext* txn);
+
     CappedCallback* _cappedCallback;
     int64_t _storageSize = baseSize;
     CollectionOptions _options;
@@ -239,16 +236,6 @@ private:
     const StringData _DBPATH;
     pool<root> mapPool;
     persistent_ptr<PmseMap<InitData>> mapper;
-    void deleteCappedAsNeeded(OperationContext* txn) {
-        while(mapper->isCapped() && mapper->removalIsNeeded()) {
-            uint64_t idToDelete = mapper->getCappedFirstId();
-            RecordId id(idToDelete);
-            RecordData data;
-            findRecord(txn, id, &data);
-            mapper->remove(idToDelete);
-            uassertStatusOK(_cappedCallback->aboutToDeleteCapped(txn, id, data));
-        }
-    }
 };
 }
 #endif /* SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_RECORD_STORE_H_ */
