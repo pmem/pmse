@@ -131,6 +131,7 @@ StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
         return StatusWith<RecordId>(ErrorCodes::InternalError,
                                     "Not allocated memory!");
     id = mapper->insert(obj);
+    std::cout << obj  << ": " << id << std::endl;
     if(!id)
         return StatusWith<RecordId>(ErrorCodes::OperationFailed,
                                     "Null record Id!");
@@ -174,7 +175,20 @@ void PmseRecordStore::setCappedCallback(CappedCallback* cb) {
 
 void PmseRecordStore::temp_cappedTruncateAfter(OperationContext* txn, RecordId end,
                                                bool inclusive) {
-    log() << "Not implemented temp_cappedTruncateAfter()";
+    PmseRecordCursor cursor(mapper, true);
+    auto rec = cursor.seekExact(end);
+    if(!inclusive)
+        rec = cursor.next();
+    while(rec != boost::none) {
+        std::cout << rec->id << std::endl;
+        RecordId id(rec->id);
+        RecordData data(rec->data);
+        rec = cursor.next();
+        if(_cappedCallback) {
+            deleteRecord(txn, id);
+            _cappedCallback->aboutToDeleteCapped(txn, id, data);
+        }
+    }
 }
 
 bool PmseRecordStore::findRecord(OperationContext* txn, const RecordId& loc,
@@ -199,8 +213,9 @@ void PmseRecordStore::deleteCappedAsNeeded(OperationContext* txn) {
     }
 }
 
-PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper) : _lastMoveWasRestore(false) {
+PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper, bool forward) : _forward(forward), _lastMoveWasRestore(false) {
     _mapper = mapper;
+    _before = nullptr;
     _cur = nullptr;
 }
 
@@ -231,6 +246,7 @@ void PmseRecordCursor::moveToNext(bool inNext) {
             listNumber++;
         }
     }
+
     if(inNext) {
         _cur = cursor;
         actual = listNumber;
@@ -246,9 +262,12 @@ boost::optional<Record> PmseRecordCursor::next() {
     if(_lastMoveWasRestore) {
         _lastMoveWasRestore = false;
     } else {
-        moveToNext();
+        if(_forward)
+            moveToNext();
+        else
+            moveBackward();
     }
-    if(_cur == nullptr) {
+    if(_cur == nullptr || _eof) {
         _eof = true;
         return boost::none;
     }
