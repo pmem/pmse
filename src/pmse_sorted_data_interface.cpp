@@ -63,7 +63,7 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
 Status PmseSortedDataInterface::insert(OperationContext* txn,
                                        const BSONObj& key, const RecordId& loc,
                                        bool dupsAllowed) {
-
+    std::cout << "PmseSortedDataInterface::insert " << (dupsAllowed ? "dups allowed" : "dups not allowed") << std::endl;
     BSONObj_PM bsonPM;
     BSONObj owned = key.getOwned();
     Status status = Status::OK();

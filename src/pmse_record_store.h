@@ -64,7 +64,7 @@ struct root {
 
 class PmseRecordCursor final : public SeekableRecordCursor {
 public:
-    PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper);
+    PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper, bool forward);
 
     boost::optional<Record> next();
 
@@ -81,15 +81,47 @@ public:
     void saveUnpositioned();
 private:
     persistent_ptr<PmseMap<InitData>> _mapper;
+    persistent_ptr<KVPair> _before;
     persistent_ptr<KVPair> _cur;
     persistent_ptr<KVPair> _restorePoint;
     p<bool> _eof = false;
     p<bool> _isCapped;
+    p<bool> _forward;
     p<bool> _lastMoveWasRestore;
     p<int> actual = 0;
     p<int> _actualAfterRestore = 0;
     PMEMoid _currentOid = OID_NULL;
     void moveToNext(bool inNext = true);
+    void moveToLast() {
+        _cur = _mapper->getFirstPtr(0); //In case of capped
+        if(_cur && !_forward) {
+            while(_cur->next) {
+                _cur = _cur->next;
+            }
+        }
+    }
+    void moveBackward() {
+        std::cout << "moveBackward()" << std::endl;
+        //TODO: Implement capability to move backward in normal collection
+        if(!_eof && _cur) {
+            auto temp = _mapper->getFirstPtr(0);
+            _before = nullptr;
+            if(temp && !_forward) {
+                while(temp->next && temp != _cur) {
+                    _before = temp;
+                    temp = temp->next;
+                }
+            }
+            _cur = _before;
+        } else {
+            moveToLast();
+        }
+        if(_cur == nullptr) {
+            std::cout << "Ups, null _cur" << std::endl;
+            _eof = true;
+        }
+//        std::cout << "moved to " << _cur->idValue << std::endl;
+    }
 };
 
 class PmseRecordStore : public RecordStore {
@@ -174,7 +206,12 @@ public:
 
     std::unique_ptr<SeekableRecordCursor> getCursor(OperationContext* txn,
                                                     bool forward) const final {
-        return stdx::make_unique<PmseRecordCursor>(mapper);
+        if(forward) {
+            std::cout << "forward cursor!" << std::endl;
+        } else {
+            std::cout << "reverse cursor!" << std::endl;
+        }
+        return stdx::make_unique<PmseRecordCursor>(mapper, forward);
     }
 
     virtual Status truncate(OperationContext* txn) {
