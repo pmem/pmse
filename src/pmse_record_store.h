@@ -43,7 +43,9 @@
 
 #include "mongo/platform/basic.h"
 #include "mongo/db/catalog/collection_options.h"
+#include "mongo/db/storage/capped_callback.h"
 #include "mongo/stdx/memory.h"
+
 
 #include "pmse_map.h"
 
@@ -82,6 +84,7 @@ private:
     persistent_ptr<KVPair> _cur;
     persistent_ptr<KVPair> _restorePoint;
     p<bool> _eof = false;
+    p<bool> _isCapped;
     p<bool> _lastMoveWasRestore;
     p<int> actual = 0;
     p<int> _actualAfterRestore = 0;
@@ -92,20 +95,15 @@ private:
 class PmseRecordStore : public RecordStore {
 public:
     PmseRecordStore(StringData ns, const CollectionOptions& options,
-                       StringData dbpath);
-    ~PmseRecordStore() {
-        try {
-            mapPool.close();
-        } catch (std::logic_error &e) {
-            std::cout << e.what() << std::endl;
-        }
-    }
+                    StringData dbpath);
+
+    ~PmseRecordStore();
 
     virtual const char* name() const {
         return storeName.c_str();
     }
 
-    virtual void setCappedCallback(CappedCallback*);
+    virtual void setCappedCallback(CappedCallback* cb);
 
     virtual long long dataSize(OperationContext* txn) const {
         return mapper->dataSize();
@@ -158,10 +156,10 @@ public:
     }
 
     virtual Status updateRecord(OperationContext* txn,
-                                              const RecordId& oldLocation,
-                                              const char* data, int len,
-                                              bool enforceQuota,
-                                              UpdateNotifier* notifier);
+                                const RecordId& oldLocation,
+                                const char* data, int len,
+                                bool enforceQuota,
+                                UpdateNotifier* notifier);
 
     virtual bool updateWithDamagesSupported() const {
         return false;
@@ -187,8 +185,7 @@ public:
     }
 
     virtual void temp_cappedTruncateAfter(OperationContext* txn, RecordId end,
-                                          bool inclusive) {
-    }
+                                          bool inclusive);
 
     virtual Status validate(OperationContext* txn, bool full, bool scanData,
                             ValidateAdaptor* adaptor, ValidateResults* results,
@@ -233,6 +230,8 @@ public:
     }
 
 private:
+    void deleteCappedAsNeeded(OperationContext* txn);
+
     CappedCallback* _cappedCallback;
     int64_t _storageSize = baseSize;
     CollectionOptions _options;

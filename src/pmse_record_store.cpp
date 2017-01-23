@@ -70,7 +70,7 @@ PmseRecordStore::PmseRecordStore(StringData ns,
     std::string mapper_filename = _DBPATH.toString() + ns.toString()
                     + "_mapper";
     if (!boost::filesystem::exists(mapper_filename.c_str())) {
-        std::cout << "Mapper create pool..." << std::endl;
+        log() << "Mapper create pool...";
         mapPool = pool<root>::create(mapper_filename, "kvmapper",
                                      (ns.toString() == "local.startup_log" ||
                                       ns.toString() == "_mdb_catalog" ? 10 : 80)
@@ -105,6 +105,14 @@ PmseRecordStore::PmseRecordStore(StringData ns,
     };
 }
 
+PmseRecordStore::~PmseRecordStore() {
+        try {
+            mapPool.close();
+        } catch (std::logic_error &e) {
+            log() << e.what();
+        }
+    }
+
 StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
                                                       const char* data, int len,
                                                       bool enforceQuota) {
@@ -117,7 +125,7 @@ StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
             memcpy(obj->data, data, len);
         });
     } catch (std::exception &e) {
-        std::cout << e.what() << std::endl;
+        log() << e.what();
     }
     if(obj == nullptr)
         return StatusWith<RecordId>(ErrorCodes::InternalError,
@@ -129,13 +137,13 @@ StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
     while(mapper->dataSize() > _storageSize) {
         _storageSize =  _storageSize + baseSize;
     }
+    deleteCappedAsNeeded(txn);
     return StatusWith<RecordId>(RecordId(id));
 }
 
-Status PmseRecordStore::updateRecord(
-                OperationContext* txn, const RecordId& oldLocation,
-                const char* data, int len, bool enforceQuota,
-                UpdateNotifier* notifier) {
+Status PmseRecordStore::updateRecord(OperationContext* txn, const RecordId& oldLocation,
+                                     const char* data, int len, bool enforceQuota,
+                                     UpdateNotifier* notifier) {
     persistent_ptr<InitData> obj;
     try {
         transaction::exec_tx(mapPool, [&] {
@@ -143,9 +151,10 @@ Status PmseRecordStore::updateRecord(
             obj->size = len;
             memcpy(obj->data, data, len);
             mapper->updateKV(oldLocation.repr(), obj);
+            deleteCappedAsNeeded(txn);
         });
     } catch (std::exception &e) {
-        std::cout << e.what() << std::endl;
+        log() << e.what();
         return Status(ErrorCodes::BadValue, e.what());
     }
     while(mapper->dataSize() > _storageSize) {
@@ -159,8 +168,13 @@ void PmseRecordStore::deleteRecord(OperationContext* txn,
     mapper->remove((uint64_t) dl.repr());
 }
 
-void PmseRecordStore::setCappedCallback(CappedCallback*) {
-    log() << "Not mocked setCappedCallback";
+void PmseRecordStore::setCappedCallback(CappedCallback* cb) {
+    _cappedCallback = cb;
+}
+
+void PmseRecordStore::temp_cappedTruncateAfter(OperationContext* txn, RecordId end,
+                                               bool inclusive) {
+    log() << "Not implemented temp_cappedTruncateAfter()";
 }
 
 bool PmseRecordStore::findRecord(OperationContext* txn, const RecordId& loc,
@@ -172,6 +186,17 @@ bool PmseRecordStore::findRecord(OperationContext* txn, const RecordId& loc,
         return true;
     }
     return false;
+}
+
+void PmseRecordStore::deleteCappedAsNeeded(OperationContext* txn) {
+    while(mapper->isCapped() && mapper->removalIsNeeded()) {
+        uint64_t idToDelete = mapper->getCappedFirstId();
+        RecordId id(idToDelete);
+        RecordData data;
+        findRecord(txn, id, &data);
+        mapper->remove(idToDelete);
+        uassertStatusOK(_cappedCallback->aboutToDeleteCapped(txn, id, data));
+    }
 }
 
 PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper) : _lastMoveWasRestore(false) {
@@ -252,6 +277,10 @@ void PmseRecordCursor::save() {
 }
 
 bool PmseRecordCursor::restore() {
+    if(_mapper->isCapped()) {
+        _eof = true;
+        return false;
+    }
     if(_eof)
         return true;
     if(_restorePoint == nullptr) {

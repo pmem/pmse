@@ -55,8 +55,7 @@ public:
                             StringData dbpath);
 
     virtual SortedDataBuilderInterface* getBulkBuilder(OperationContext* txn,
-                                                       bool dupsAllowed)
-                                                                       override;
+                                                       bool dupsAllowed) override;
 
     virtual Status insert(OperationContext* txn, const BSONObj& key,
                           const RecordId& loc, bool dupsAllowed);
@@ -65,10 +64,7 @@ public:
                          const RecordId& loc, bool dupsAllowed);
 
     virtual Status dupKeyCheck(OperationContext* txn, const BSONObj& key,
-                               const RecordId& loc) {
-        // TODO: Implement dupKeyCheck
-        return Status::OK();
-    }
+                               const RecordId& loc);
 
     virtual void fullValidate(OperationContext* txn, long long* numKeysOut,
                               ValidateResults* fullResults) const {
@@ -101,7 +97,7 @@ public:
 
 private:
     void moveToNext();
-    p<int> _records;
+    p<int> _records = 0;
     StringData filepath;
     pool<PmseTree> pm_pool;
     persistent_ptr<PmseTree> tree;

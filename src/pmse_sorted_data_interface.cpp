@@ -35,11 +35,13 @@
 #include "pmse_sorted_data_interface.h"
 #include "pmse_index_cursor.h"
 
+#include "mongo/util/log.h"
+
 namespace mongo {
 
 PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
                                                  const IndexDescriptor* desc,
-                                                 StringData dbpath) {
+                                                 StringData dbpath) : _records(0) {
     filepath = dbpath;
     std::string filename = filepath.toString() + ident.toString();
     _desc = desc;
@@ -49,8 +51,6 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
                         10 * PMEMOBJ_MIN_POOL, 0666);
     } else {
         pm_pool = pool<PmseTree>::open(filename.c_str(), "pmse");
-        std::cout << " openPool = " << std::endl;
-
     }
     tree = pm_pool.get_root();
 
@@ -72,16 +72,16 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
 
     try {
         transaction::exec_tx(pm_pool,
-                        [&] {
-                            obj = pmemobj_tx_alloc(owned.objsize(), 1);
-                            memcpy( (void*)obj.get(), owned.objdata(), owned.objsize());
-                        });
+                             [&] {
+            obj = pmemobj_tx_alloc(owned.objsize(), 1);
+            memcpy( (void*)obj.get(), owned.objdata(), owned.objsize());
+        });
 
-    bsonPM.data = obj;
-    status = tree->insert(pm_pool, bsonPM, loc, _desc->keyPattern(), dupsAllowed);
-    ++_records;
+        bsonPM.data = obj;
+        status = tree->insert(pm_pool, bsonPM, loc, _desc->keyPattern(), dupsAllowed);
+        ++_records;
     } catch (std::exception &e) {
-            std::cout << e.what() << std::endl;
+        log() << e.what();
     }
     return status;
 }
@@ -99,9 +99,16 @@ void PmseSortedDataInterface::unindex(OperationContext* txn, const BSONObj& key,
         });
         --_records;
     } catch (std::exception &e) {
-        std::cout << e.what() << std::endl;
+        log() << e.what();
     }
 
+}
+
+Status PmseSortedDataInterface::dupKeyCheck(OperationContext* txn, const BSONObj& key,
+                                            const RecordId& loc) {
+    // TODO: Implement dupKeyCheck
+    log() << "Not implemented: dupKeyCheck";
+    return Status::OK();
 }
 
 std::unique_ptr<SortedDataInterface::Cursor> PmseSortedDataInterface::newCursor(

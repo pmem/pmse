@@ -84,19 +84,27 @@ public:
         return id->idValue;
     }
 
+    uint64_t getCappedFirstId() {
+        if(isCapped())
+            return getFirstPtr(0)->idValue;
+        return 0;
+    }
+
+    bool removalIsNeeded() {
+        if(isCapped()) {
+            if (_list[0]->actualSizeOfCollecion > _sizeOfCollection) //size exceed
+                return true;
+            if ((_maxDocuments != 0) && (_list[0]->_size > _maxDocuments)) //number of items exceed
+                return true;
+        }
+        return false;
+    }
+
     bool insertKV(persistent_ptr<KVPair> &id, persistent_ptr<T> value) { //internal use
-        if (_isCapped) {
-            if (!hasId(id->idValue)) {
-                _list[id->idValue % _size]->insertKV_capped(id, value, _isCapped,
-                                                   _maxDocuments, _sizeOfCollection);
-            } else
-                return false;
+        if (!hasId(id->idValue)) {
+            _list[id->idValue % _size]->insertKV(id, value);
         } else {
-            if (!hasId(id->idValue)) {
-                _list[id->idValue % _size]->insertKV(id, value);
-            } else {
-                return false;
-            }
+            return false;
         }
         _dataSize += pmemobj_alloc_usable_size(value.raw());
         return true; //correctly added
@@ -126,6 +134,9 @@ public:
     }
 
     bool remove(uint64_t id) {
+        persistent_ptr<T> temp;
+        if(find(id, temp))
+            _dataSize -= pmemobj_alloc_usable_size(temp.raw());
         _list[id % _size]->deleteKV(id, _deleted);
         _hashmapSize--;
         return true;
