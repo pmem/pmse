@@ -184,7 +184,6 @@ private:
     persistent_ptr<PmseTreeNode> root;
     persistent_ptr<PmseTreeNode> first;
     persistent_ptr<PmseTreeNode> last;
-    //CursorObject _cursor;
     BSONObj _ordering;
     p<bool> modified = false;
 };
