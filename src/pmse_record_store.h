@@ -139,16 +139,9 @@ class PmseRecordStore : public RecordStore {
     virtual Status insertRecordsWithDocWriter(OperationContext* txn,
                                               const DocWriter* const* docs,
                                               size_t nDocs,
-                                              RecordId* idsOut = nullptr) {
-        // TODO(kfilipek): Implement insertRecordsWithDocWriter
-        std::cout << "Not implemented: insertRecordsWithDocWriter" << std::endl;
-        return Status::OK();
-    }
+                                              RecordId* idsOut = nullptr);
 
-    void waitForAllEarlierOplogWritesToBeVisible(OperationContext* txn) const override {
-        // TODO(kfilipek): Implement insertRecordsWithDocWriter
-        std::cout << "Not implemented: waitForAllEarlierOplogWritesToBeVisible" << std::endl;
-    }
+    virtual void waitForAllEarlierOplogWritesToBeVisible(OperationContext* txn) const;
 
     virtual Status updateRecord(OperationContext* txn,
                                 const RecordId& oldLocation,

@@ -169,7 +169,7 @@ void PmseListIntPtr::update(uint64_t key,
                         delete_persistent<InitData>(rec->ptr);
                     });
                 } catch(std::exception &e) {
-                    std::cout << e.what() << std::endl;
+                    log() << e.what();
                 }
             }
             rec->ptr = value;
