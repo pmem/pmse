@@ -36,17 +36,19 @@
  *  Created on: Sep 22, 2016
  *      Author: kfilipek
  */
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
 
 #include "pmse_list_int_ptr.h"
 
 #include <exception>
-#include <iostream>
+
+#include "mongo/util/log.h"
 
 namespace mongo {
 
 PmseListIntPtr::PmseListIntPtr() : counter(1) {
     pop = pool_by_vptr(this);
-};
+}
 
 PmseListIntPtr::~PmseListIntPtr() {
 }
@@ -59,9 +61,10 @@ uint64_t PmseListIntPtr::size() {
     return _size;
 }
 
-void PmseListIntPtr::insertKV(persistent_ptr<KVPair> &key, persistent_ptr<InitData> &value) {
+void PmseListIntPtr::insertKV(const persistent_ptr<KVPair> &key,
+                              const persistent_ptr<InitData> &value) {
     try {
-        transaction::exec_tx(pop, [&] {
+        transaction::exec_tx(pop, [this, &key, &value] {
             key->ptr = value;
             key->next = nullptr;
             if (head != nullptr) {
@@ -74,102 +77,40 @@ void PmseListIntPtr::insertKV(persistent_ptr<KVPair> &key, persistent_ptr<InitDa
             _size++;
         });
     } catch (std::exception &e) {
-        std::cout << "KVMapper: " << e.what() << std::endl;
+        log() << "KVMapper: " << e.what();
     }
 }
 
-void PmseListIntPtr::insertKV_capped(persistent_ptr<KVPair> &key,
-                                     persistent_ptr<InitData> &value,
-                                     bool isCapped, uint64_t maxDoc,
-                                     uint64_t sizeOfColl) {
-    try {
-        transaction::exec_tx(pop, [&] {
-            key->ptr = value;
-            key->next = nullptr;
-
-            isFullCapped = false;
-            size_t value_size = pmemobj_alloc_usable_size(value.raw());
-            uint64_t tempSize = actualSizeOfCollection + value_size;
-
-            if(tempSize >= sizeOfColl) {
-                if((tempSize - (pmemobj_alloc_usable_size(head.raw()) + sizeOfFirstData)) > sizeOfColl)
-                    isSpace = BLOCKED;
-                else
-                    isSpace = NO;
-            } else {
-                isSpace = YES;
-            }
-
-            if(head != nullptr) {
-                if(_size == maxDoc || isSpace == NO) {
-                    if(head->next != nullptr) {
-                        head = head->next;
-                        tail->next = key;
-                        tail = key;
-                    }
-                    else {
-                        head = key;
-                        tail = head;
-                    }
-
-                    actualSizeOfCollection -= (sizeOfFirstData + pmemobj_alloc_usable_size(head.raw()))
-                                     + value_size;
-
-                    if(!isFullCapped)
-                        isFullCapped = true;
-
-                    delete_persistent<KVPair>(first);
-                    first = head;
-                    sizeOfFirstData = value_size;
-                } else if(isSpace == YES) {
-                    tail->next = key;
-                    tail = key;
-                    actualSizeOfCollection = tempSize;
-                }
-            } else {
-                head = key;
-                tail = head;
-                first = head;
-                sizeOfFirstData = value_size;
-                actualSizeOfCollection = tempSize;
-            }
-
-            if(!isFullCapped)
-                _size++;
-        });
-    } catch (std::exception &e) {
-        std::cout << "KVMapper: " << e.what() << std::endl;
-    }
-}
-
-int64_t PmseListIntPtr::deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted) {
+int64_t PmseListIntPtr::deleteKV(uint64_t key,
+                                 persistent_ptr<KVPair> &deleted) {
     auto before = head;
     int64_t sizeFreed = 0;
     for (auto rec = head; rec != nullptr; rec = rec->next) {
         if (rec->idValue == key) {
-            transaction::exec_tx(pop, [&] {
+            transaction::exec_tx(pop, [this, &deleted, &before,
+                                       &sizeFreed, &rec] {
                 if (before != head) {
                     before->next = rec->next;
                     if (before->next == nullptr)
                         tail = before;
                     before.flush();
                 } else {
-                    if(head == rec) {
+                    if (head == rec) {
                         head = rec->next;
                     } else {
                         before->next = rec->next;
-                        if(rec->next != nullptr) {
+                        if (rec->next != nullptr) {
                             tail = rec->next;
                         } else {
                             tail = before;
                         }
                     }
-                    if(head == nullptr) {
+                    if (head == nullptr) {
                         tail = head;
                     }
                 }
                 _size--;
-                if(deleted != nullptr) {
+                if (deleted != nullptr) {
                     rec->next = deleted;
                     deleted = rec;
                 } else {
@@ -218,12 +159,13 @@ bool PmseListIntPtr::getPair(uint64_t key, persistent_ptr<KVPair> &item_ptr) {
     return false;
 }
 
-void PmseListIntPtr::update(uint64_t key, persistent_ptr<InitData> &value) {
+void PmseListIntPtr::update(uint64_t key,
+                            const persistent_ptr<InitData> &value) {
     for (auto rec = head; rec != nullptr; rec = rec->next) {
         if (rec->idValue == key) {
-            if(rec->ptr != nullptr) {
+            if (rec->ptr != nullptr) {
                 try {
-                    transaction::exec_tx(pop, [&] {
+                    transaction::exec_tx(pop, [&rec] {
                         delete_persistent<InitData>(rec->ptr);
                     });
                 } catch(std::exception &e) {
@@ -239,8 +181,8 @@ void PmseListIntPtr::update(uint64_t key, persistent_ptr<InitData> &value) {
 void PmseListIntPtr::clear() {
     if (!head)
         return;
-    transaction::exec_tx(pop, [&] {
-        for(auto rec = head; rec != nullptr;) {
+    transaction::exec_tx(pop, [this] {
+        for (auto rec = head; rec != nullptr;) {
             auto temp = rec->next;
             delete_persistent<KVPair>(rec);
             rec = temp;
@@ -254,4 +196,4 @@ uint64_t PmseListIntPtr::getNextId() {
     return counter++;
 }
 
-}
+}  // namespace mongo
