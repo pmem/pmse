@@ -213,6 +213,20 @@ void PmseRecordStore::deleteCappedAsNeeded(OperationContext* txn) {
     }
 }
 
+Status PmseRecordStore::insertRecordsWithDocWriter(OperationContext* txn,
+                                          const DocWriter* const* docs,
+                                          size_t nDocs,
+                                          RecordId* idsOut) {
+    // TODO(kfilipek): Implement insertRecordsWithDocWriter
+    log() << "Not implemented: insertRecordsWithDocWriter";
+    return Status::OK();
+}
+
+void PmseRecordStore::waitForAllEarlierOplogWritesToBeVisible(OperationContext* txn) const {
+    // TODO(kfilipek): Implement insertRecordsWithDocWriter
+    log() << "Not implemented: waitForAllEarlierOplogWritesToBeVisible";
+}
+
 PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper, bool forward) : _forward(forward), _lastMoveWasRestore(false) {
     _mapper = mapper;
     _before = nullptr;

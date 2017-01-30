@@ -30,9 +30,11 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
+
 #include "pmse_index_cursor.h"
 
-#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
+#include "mongo/util/log.h"
 
 namespace mongo {
 
@@ -410,8 +412,7 @@ bool PmseCursor::correctType(BSONObj record) {
             result = true;
         break;
     default:
-        std::cout << "not supported ";
-        std::cout << std::endl;
+        log() << "not supported";
     }
     return result;
 }
@@ -667,19 +668,16 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(
 }
 
 boost::optional<IndexKeyEntry> PmseCursor::seek(
-                const IndexSeekPoint& seekPoint, RequestedInfo parts =
-                                kKeyAndLoc) {
-    std::cout << "seek not implemented";
-    std::cout << std::endl;
+                const IndexSeekPoint& seekPoint,
+                RequestedInfo parts = kKeyAndLoc) {
+    log() << "seek not implemented";
     return boost::none;
 }
 
 boost::optional<IndexKeyEntry> PmseCursor::seekExact(
                 const BSONObj& key, RequestedInfo parts = kKeyAndLoc) {
     auto kv = seek(key, true, kKeyAndLoc);
-    if (kv
-                    && kv->key.woCompare(key, BSONObj(), /*considerFieldNames*/
-                                    false) == 0)
+    if (kv && kv->key.woCompare(key, BSONObj(), false) == 0)
         return kv;
     return boost::none;
 }
