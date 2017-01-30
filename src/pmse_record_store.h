@@ -80,6 +80,10 @@ public:
 
     void saveUnpositioned();
 private:
+    void moveToNext(bool inNext = true);
+    void moveToLast();
+    void moveBackward();
+
     persistent_ptr<PmseMap<InitData>> _mapper;
     persistent_ptr<KVPair> _before;
     persistent_ptr<KVPair> _cur;
@@ -91,37 +95,6 @@ private:
     p<int> actual = 0;
     p<int> _actualAfterRestore = 0;
     PMEMoid _currentOid = OID_NULL;
-    void moveToNext(bool inNext = true);
-    void moveToLast() {
-        _cur = _mapper->getFirstPtr(0); //In case of capped
-        if(_cur && !_forward) {
-            while(_cur->next) {
-                _cur = _cur->next;
-            }
-        }
-    }
-    void moveBackward() {
-        std::cout << "moveBackward()" << std::endl;
-        //TODO: Implement capability to move backward in normal collection
-        if(!_eof && _cur) {
-            auto temp = _mapper->getFirstPtr(0);
-            _before = nullptr;
-            if(temp && !_forward) {
-                while(temp->next && temp != _cur) {
-                    _before = temp;
-                    temp = temp->next;
-                }
-            }
-            _cur = _before;
-        } else {
-            moveToLast();
-        }
-        if(_cur == nullptr) {
-            std::cout << "Ups, null _cur" << std::endl;
-            _eof = true;
-        }
-//        std::cout << "moved to " << _cur->idValue << std::endl;
-    }
 };
 
 class PmseRecordStore : public RecordStore {
@@ -138,11 +111,11 @@ public:
     virtual void setCappedCallback(CappedCallback* cb);
 
     virtual long long dataSize(OperationContext* txn) const {
-        return mapper->dataSize();
+        return _mapper->dataSize();
     }
 
     virtual long long numRecords(OperationContext* txn) const {
-        return (long long) mapper->fillment();
+        return (long long) _mapper->fillment();
     }
 
     virtual bool isCapped() const {
@@ -163,15 +136,6 @@ public:
     virtual StatusWith<RecordId> insertRecord(OperationContext* txn,
                                               const char* data, int len,
                                               bool enforceQuota);
-
-    virtual StatusWith<RecordId> insertRecord(OperationContext* txn,
-                                              const DocWriter* doc,
-                                              bool enforceQuota) {
-        // TODO: Implement record inserting
-        std::cout << "Not implemented insertRecord function!" << std::endl;
-        _numInserts++;
-        return StatusWith<RecordId>(RecordId(6, 4));
-    }
 
     virtual Status insertRecordsWithDocWriter(OperationContext* txn,
                                               const DocWriter* const* docs,
@@ -206,16 +170,11 @@ public:
 
     std::unique_ptr<SeekableRecordCursor> getCursor(OperationContext* txn,
                                                     bool forward) const final {
-        if(forward) {
-            std::cout << "forward cursor!" << std::endl;
-        } else {
-            std::cout << "reverse cursor!" << std::endl;
-        }
-        return stdx::make_unique<PmseRecordCursor>(mapper, forward);
+        return stdx::make_unique<PmseRecordCursor>(_mapper, forward);
     }
 
     virtual Status truncate(OperationContext* txn) {
-        if(!mapper->truncate()) {
+        if(!_mapper->truncate()) {
             return Status(ErrorCodes::OperationFailed, "Truncate error");
         }
         return Status::OK();
@@ -232,14 +191,14 @@ public:
 
     virtual void appendCustomStats(OperationContext* txn,
                                    BSONObjBuilder* result, double scale) const {
-        if(mapper->isCapped()) {
+        if(_mapper->isCapped()) {
             result->appendNumber("capped", true);
-            result->appendNumber("maxSize", floor(mapper->getMax() / scale));
-            result->appendNumber("max", mapper->getMaxSize());
+            result->appendNumber("maxSize", floor(_mapper->getMax() / scale));
+            result->appendNumber("max", _mapper->getMaxSize());
         } else {
             result->appendNumber("capped", false);
         }
-        result->appendNumber("numInserts", mapper->fillment());
+        result->appendNumber("numInserts", _mapper->fillment());
     }
 
     virtual Status touch(OperationContext* txn, BSONObjBuilder* output) const {
@@ -262,7 +221,7 @@ public:
                             ValidateResults* results,
                             BSONObjBuilder* output) {
         // TODO: Implement validate
-        output->appendNumber("nrecords", mapper->fillment());
+        output->appendNumber("nrecords", _mapper->fillment());
         return Status::OK();
     }
 
@@ -275,7 +234,7 @@ private:
     long long _numInserts;
     const StringData _DBPATH;
     pool<root> mapPool;
-    persistent_ptr<PmseMap<InitData>> mapper;
+    persistent_ptr<PmseMap<InitData>> _mapper;
 };
 }
 #endif /* SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_RECORD_STORE_H_ */

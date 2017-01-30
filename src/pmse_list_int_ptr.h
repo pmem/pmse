@@ -106,7 +106,7 @@ private:
     FreeSpace isSpace = YES;
     bool isFullCapped;
     persistent_ptr<KVPair> first;
-    p<uint64_t> actualSizeOfCollecion = 0;
+    p<uint64_t> actualSizeOfCollection = 0;
 };
 }
 #endif /* SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_LIST_INT_PTR_H_ */

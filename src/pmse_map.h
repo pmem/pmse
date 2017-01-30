@@ -92,8 +92,9 @@ public:
 
     bool removalIsNeeded() {
         if(isCapped()) {
-            if (_list[0]->actualSizeOfCollecion > _sizeOfCollection) //size exceed
+            if ((uint64_t)_dataSize > _sizeOfCollection) {
                 return true;
+            }
             if ((_maxDocuments != 0) && (_list[0]->_size > _maxDocuments)) //number of items exceed
                 return true;
         }
