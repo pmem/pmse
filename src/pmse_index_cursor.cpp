@@ -49,7 +49,7 @@ PmseCursor::PmseCursor(OperationContext* txn, bool isForward,
     cursorType = EOO;
 
     _endPosition = 0;
-    wasMoved = false;
+    _wasMoved = false;
     _eofRestore = false;
 
     BSONObjBuilder minBob;
@@ -139,7 +139,6 @@ void PmseCursor::setEndPosition(const BSONObj& key, bool inclusive) {
      * Find leaf node where key may exist
      */
     persistent_ptr<PmseTreeNode> node = find_leaf(_tree->root, key, _ordering);
-
 
     if (node == nullptr) {
         _endPosition = nullptr;
@@ -312,22 +311,21 @@ boost::optional<IndexKeyEntry> PmseCursor::next(
     if (_cursor.node == nullptr)
         return boost::none;
 
-    if(_eofRestore)
+    if (_eofRestore)
     {
         _eofRestore= false;
         return boost::none;
     }
     if (correctType(_cursor.node->keys[_cursor.index].getBSON())) {
 
-        if(!wasMoved)
+        if(!_wasMoved)
         {
             moveToNext();
         }
-        wasMoved = false;
+        _wasMoved = false;
         if(_cursor.node)
         {
-            if (_endPosition
-                            && (SimpleBSONObjComparator::kInstance.evaluate(
+            if (_endPosition && (SimpleBSONObjComparator::kInstance.evaluate(
                                             _cursor.node->keys[_cursor.index].getBSON()
                                                             == _endPosition->getBSON()))) {
                 return boost::none;
@@ -688,9 +686,9 @@ boost::optional<IndexKeyEntry> PmseCursor::seekExact(
 
 void PmseCursor::save() {
 
-    if(!wasMoved)
+    if(!_wasMoved)
         moveToNext();
-    wasMoved = true;
+    _wasMoved = true;
     if(_cursor.node.raw_ptr()->off != 0)
     {
         _cursorKey = _cursor.node->keys[_cursor.index].getBSON();

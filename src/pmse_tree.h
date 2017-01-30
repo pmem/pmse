@@ -119,6 +119,8 @@ public:
     void remove(pool_base pop, BSONObj& key, const RecordId& loc,
                 bool dupsAllowed, const BSONObj& _ordering);
 
+    Status dupKeyCheck(pool_base pop,BSONObj& key, const RecordId& loc);
+
 private:
     uint64_t cut(uint64_t length);
     void placeAfter(PMEMobjpool *pm_pool, BSONObj& key, const RecordId& loc);
@@ -142,8 +144,6 @@ private:
                                               const RecordId& loc);
     Status insertKeyIntoLeaf(persistent_ptr<PmseTreeNode> node, BSONObj_PM& key,
                              const RecordId& loc, const BSONObj& _ordering);
-    /*persistent_ptr<PmseTreeNode> find(persistent_ptr<PmseTreeNode> node, BSONObj_PM& key,
-     const BSONObj& _ordering);*/
     persistent_ptr<PmseTreeNode> locateLeafWithKey(
                     persistent_ptr<PmseTreeNode> node, BSONObj& key,
                     const BSONObj& _ordering);
@@ -185,7 +185,6 @@ private:
     persistent_ptr<PmseTreeNode> first;
     persistent_ptr<PmseTreeNode> last;
     BSONObj _ordering;
-    p<bool> modified = false;
 };
 
 }

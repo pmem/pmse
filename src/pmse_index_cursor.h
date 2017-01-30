@@ -94,7 +94,7 @@ private:
     BSONObj _cursorKey;
     RecordId _cursorId;
 
-    bool wasMoved;
+    bool _wasMoved;
     bool _eofRestore;
 
 };

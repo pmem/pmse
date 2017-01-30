@@ -46,6 +46,54 @@
 
 namespace mongo {
 
+Status PmseTree::dupKeyCheck(pool_base pop,BSONObj& key, const RecordId& loc)
+{
+    persistent_ptr<PmseTreeNode> node;
+    uint64_t i;
+    int64_t cmp;
+    node = locateLeafWithKey(root, key, _ordering);
+
+    for(i=0;i<node->num_keys;i++)
+    {
+        cmp = key.woCompare(node->keys[i].getBSON(), _ordering,
+                                    false);
+        if(cmp==0)  //found the same key
+        {
+            if(node->values_array[i]!=loc)  //found the same key with different ID - Error
+            {
+                StringBuilder sb;
+                sb << "Duplicate key error ";
+                sb << "dup key: " << key.toString();
+                return Status(ErrorCodes::DuplicateKey, sb.str());
+            }
+            else
+            {
+                if(i!=0) // we are not on a first key, so previous one was different - don't need to check it
+                    return Status::OK();
+                //check previous
+                else
+                {
+                    //check one prev
+                    if(node->previous)
+                    {
+                        if(node->previous->values_array[node->previous->num_keys]!=loc)
+                        {
+                            StringBuilder sb;
+                            sb << "Duplicate key error ";
+                            sb << "dup key: " << key.toString();
+                            return Status(ErrorCodes::DuplicateKey, sb.str());
+                        }
+                        return Status::OK();
+                    }
+                    return Status::OK();
+                }
+            }
+        }
+    }
+    return Status::OK();
+}
+
+
 void PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
                       bool dupsAllowed, const BSONObj& ordering) {
 
@@ -112,7 +160,6 @@ persistent_ptr<PmseTreeNode> PmseTree::deleteEntry(
     // Remove key and pointer from node.
 
     node = removeEntryFromNode(key, node, index);
-    modified = true;
 
     if (node == root) {
         return adjustRoot(root);
@@ -284,11 +331,6 @@ persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
 
     n->num_keys++;
     neighbor->num_keys--;
-
-    /*if (_cursor.node == neighbor) {
-        _cursor.node = n;
-        _cursor.index = 0;
-    }*/
 
     return root;
 }
@@ -890,6 +932,8 @@ Status PmseTree::insert(pool_base pop, BSONObj_PM& key, const RecordId& loc,
 
     persistent_ptr<PmseTreeNode> node;
     Status status = Status::OK();
+    uint64_t i;
+    int64_t cmp;
 
     if (!root)   //root not allocated yet
     {
@@ -905,6 +949,33 @@ Status PmseTree::insert(pool_base pop, BSONObj_PM& key, const RecordId& loc,
         return Status::OK();
     }
     node = locateLeafWithKeyPM(root, key, _ordering);
+
+    /*
+     * Duplicate key check
+     */
+    if(!dupsAllowed)
+    {
+        for(i=0;i<node->num_keys;i++)
+        {
+            cmp = key.getBSON().woCompare(node->keys[i].getBSON(), _ordering,
+                                        false);
+            if(cmp==0)
+            {
+                if(node->values_array[i]!=loc)
+                {
+                    StringBuilder sb;
+                    sb << "Duplicate key error ";
+                    sb << "dup key: " << key.getBSON().toString();
+                    return Status(ErrorCodes::DuplicateKey, sb.str());
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+    }
+
     /*
      * There is place for new value
      */
