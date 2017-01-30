@@ -30,24 +30,22 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_RECORD_STORE_H_
-#define SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_RECORD_STORE_H_
+#ifndef SRC_PMSE_RECORD_STORE_H_
+#define SRC_PMSE_RECORD_STORE_H_
 
-#include <cmath>
+#include "pmse_map.h"
 
-#include "libpmem.h"
-#include "libpmemobj.h"
 #include <libpmemobj++/p.hpp>
 #include <libpmemobj++/pext.hpp>
 #include <libpmemobj++/utils.hpp>
+
+#include <cmath>
+#include <string>
 
 #include "mongo/platform/basic.h"
 #include "mongo/db/catalog/collection_options.h"
 #include "mongo/db/storage/capped_callback.h"
 #include "mongo/stdx/memory.h"
-
-
-#include "pmse_map.h"
 
 using namespace nvml::obj;
 
@@ -63,7 +61,7 @@ struct root {
 };
 
 class PmseRecordCursor final : public SeekableRecordCursor {
-public:
+ public:
     PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper, bool forward);
 
     boost::optional<Record> next();
@@ -79,7 +77,8 @@ public:
     void reattachToOperationContext(OperationContext* txn) final {}
 
     void saveUnpositioned();
-private:
+
+ private:
     void moveToNext(bool inNext = true);
     void moveToLast();
     void moveBackward();
@@ -98,7 +97,7 @@ private:
 };
 
 class PmseRecordStore : public RecordStore {
-public:
+ public:
     PmseRecordStore(StringData ns, const CollectionOptions& options,
                     StringData dbpath);
 
@@ -115,7 +114,7 @@ public:
     }
 
     virtual long long numRecords(OperationContext* txn) const {
-        return (long long) _mapper->fillment();
+        return (int64_t)_mapper->fillment();
     }
 
     virtual bool isCapped() const {
@@ -141,13 +140,13 @@ public:
                                               const DocWriter* const* docs,
                                               size_t nDocs,
                                               RecordId* idsOut = nullptr) {
-        // TODO: Implement insertRecordsWithDocWriter
+        // TODO(kfilipek): Implement insertRecordsWithDocWriter
         std::cout << "Not implemented: insertRecordsWithDocWriter" << std::endl;
         return Status::OK();
     }
 
-    virtual void waitForAllEarlierOplogWritesToBeVisible(OperationContext* txn) const {
-        // TODO: Implement insertRecordsWithDocWriter
+    void waitForAllEarlierOplogWritesToBeVisible(OperationContext* txn) const override {
+        // TODO(kfilipek): Implement insertRecordsWithDocWriter
         std::cout << "Not implemented: waitForAllEarlierOplogWritesToBeVisible" << std::endl;
     }
 
@@ -174,7 +173,7 @@ public:
     }
 
     virtual Status truncate(OperationContext* txn) {
-        if(!_mapper->truncate()) {
+        if (!_mapper->truncate()) {
             return Status(ErrorCodes::OperationFailed, "Truncate error");
         }
         return Status::OK();
@@ -191,7 +190,7 @@ public:
 
     virtual void appendCustomStats(OperationContext* txn,
                                    BSONObjBuilder* result, double scale) const {
-        if(_mapper->isCapped()) {
+        if (_mapper->isCapped()) {
             result->appendNumber("capped", true);
             result->appendNumber("maxSize", floor(_mapper->getMax() / scale));
             result->appendNumber("max", _mapper->getMaxSize());
@@ -220,21 +219,20 @@ public:
                             ValidateAdaptor* adaptor,
                             ValidateResults* results,
                             BSONObjBuilder* output) {
-        // TODO: Implement validate
+        // TODO(kfilipek): Implement validate
         output->appendNumber("nrecords", _mapper->fillment());
         return Status::OK();
     }
 
-private:
+ private:
     void deleteCappedAsNeeded(OperationContext* txn);
 
     CappedCallback* _cappedCallback;
     int64_t _storageSize = baseSize;
     CollectionOptions _options;
-    long long _numInserts;
     const StringData _DBPATH;
     pool<root> mapPool;
     persistent_ptr<PmseMap<InitData>> _mapper;
 };
-}
-#endif /* SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_RECORD_STORE_H_ */
+}  // namespace mongo
+#endif  // SRC_PMSE_RECORD_STORE_H_

@@ -56,7 +56,6 @@ PmseRecordStore::PmseRecordStore(StringData ns,
                                        StringData dbpath) :
                 RecordStore(ns), _cappedCallback(nullptr), _options(options), _DBPATH(dbpath) {
     log() << "ns: " << ns;
-    _numInserts = 0;
     std::string filename = _DBPATH.toString() + ns.toString();
     boost::filesystem::path path;
     log() << filename;
