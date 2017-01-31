@@ -106,9 +106,8 @@ void PmseSortedDataInterface::unindex(OperationContext* txn, const BSONObj& key,
 
 Status PmseSortedDataInterface::dupKeyCheck(OperationContext* txn, const BSONObj& key,
                                             const RecordId& loc) {
-    // TODO: Implement dupKeyCheck
-    log() << "Not implemented: dupKeyCheck";
-    return Status::OK();
+    BSONObj owned = key.getOwned();
+    return tree->dupKeyCheck(pm_pool,owned,loc);
 }
 
 std::unique_ptr<SortedDataInterface::Cursor> PmseSortedDataInterface::newCursor(

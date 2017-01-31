@@ -64,7 +64,7 @@ private:
     persistent_ptr<PmseTreeNode> find_leaf(persistent_ptr<PmseTreeNode> node,
                                            const BSONObj& key,
                                            const BSONObj& _ordering);
-    bool previous();
+    bool previous(CursorObject&);
     bool correctType(BSONObj record);
     void moveToNext();
 
@@ -84,13 +84,18 @@ private:
     /*
      * Cursor used for iterating with next until "_endPosition"
      */
-
-    CursorObject _previousCursor;
+    CursorObject _cursor;
     CursorObject _returnValue;
     BSONObj min;
     BSONObj max;
     BSONObj_PM end_min_pm;
     BSONObj_PM end_max_pm;
+
+    BSONObj _cursorKey;
+    RecordId _cursorId;
+
+    bool _wasMoved;
+    bool _eofRestore;
 
 };
 }
