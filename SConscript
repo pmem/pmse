@@ -1,4 +1,9 @@
+# -*- mode: python -*-
 Import("env")
+
+env = env.Clone()
+
+env.InjectMongoIncludePaths()
 
 env.Library(
     target= 'storage_pmse_base',
