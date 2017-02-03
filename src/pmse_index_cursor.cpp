@@ -670,8 +670,9 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(
 boost::optional<IndexKeyEntry> PmseCursor::seek(
                 const IndexSeekPoint& seekPoint,
                 RequestedInfo parts = kKeyAndLoc) {
-    log() << "seek not implemented";
-    return boost::none;
+    BSONObj key = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
+    const auto discriminator = _forward ? true : false;
+    return seek(key, discriminator, parts);
 }
 
 boost::optional<IndexKeyEntry> PmseCursor::seekExact(
