@@ -235,7 +235,7 @@ PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper, boo
 
 void PmseRecordCursor::moveToNext(bool inNext) {
     auto cursor = _cur;
-    auto listNumber = actual;
+    auto listNumber = (actual == -1 ? 0 : static_cast<int>(actual));
     if(cursor != nullptr) {
         if(cursor->next != nullptr) {
             cursor = cursor->next;
@@ -337,22 +337,65 @@ void PmseRecordCursor::saveUnpositioned() {
 }
 
 void PmseRecordCursor::moveToLast() {
-    _cur = _mapper->getFirstPtr(0);
-    if(_cur && !_forward) {
-        while(_cur->next) {
-            _cur = _cur->next;
+    if (_mapper->isCapped()) {
+        _cur = _mapper->getFirstPtr(0);
+        if(_cur && !_forward) {
+            while(_cur->next) {
+                _cur = _cur->next;
+            }
         }
+    } else {
+        int lastNonEmpty = -1;
+        int scope = (actual < 0 ? _mapper->_size : static_cast<int>(actual));
+        for (int i = 0; i < scope; ++i) {
+            if (_mapper->_list[i]->size())
+                lastNonEmpty = i;
+        }
+        if(lastNonEmpty == -1) {
+            _eof = true;
+            _cur = nullptr;
+            actual = -1;
+            return;
+        }
+        _cur = _mapper->getFirstPtr(lastNonEmpty);
+        if(_cur && !_forward) {
+            while(_cur->next) {
+                _cur = _cur->next;
+            }
+        }
+        actual = lastNonEmpty;
     }
 }
 
 void PmseRecordCursor::moveBackward() {
     if(!_eof && _cur) {
-        auto temp = _mapper->getFirstPtr(0);
-        _before = nullptr;
-        if(temp && !_forward) {
-            while(temp->next && temp != _cur) {
-                _before = temp;
-                temp = temp->next;
+        if (_mapper->isCapped()) {
+            auto temp = _mapper->getFirstPtr(0);
+            _before = nullptr;
+            if(temp && !_forward) {
+                while(temp->next && temp != _cur) {
+                    _before = temp;
+                    temp = temp->next;
+                }
+            }
+        } else {
+            if (_cur == _mapper->getFirstPtr(actual)) {
+                if (actual <= 0) {
+                    _before = nullptr;
+                    _eof = true;
+                } else {
+                    moveToLast();
+                    _before = _cur;
+                }
+            } else {
+                auto temp = _mapper->getFirstPtr(actual);
+                _before = nullptr;
+                if(temp && !_forward) {
+                    while(temp->next && temp != _cur) {
+                        _before = temp;
+                        temp = temp->next;
+                    }
+                }
             }
         }
         _cur = _before;

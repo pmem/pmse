@@ -91,7 +91,7 @@ class PmseRecordCursor final : public SeekableRecordCursor {
     p<bool> _isCapped;
     p<bool> _forward;
     p<bool> _lastMoveWasRestore;
-    p<int> actual = 0;
+    p<int> actual = -1;
     p<int> _actualAfterRestore = 0;
     PMEMoid _currentOid = OID_NULL;
 };
