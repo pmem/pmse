@@ -52,8 +52,8 @@ using nvml::obj::transaction;
 namespace mongo {
 
 PmseRecordStore::PmseRecordStore(StringData ns,
-                                       const CollectionOptions& options,
-                                       StringData dbpath) :
+                                 const CollectionOptions& options,
+                                 StringData dbpath) :
                 RecordStore(ns), _cappedCallback(nullptr), _options(options), _DBPATH(dbpath) {
     log() << "ns: " << ns;
     std::string filename = _DBPATH.toString() + ns.toString();
@@ -235,7 +235,7 @@ PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper, boo
 
 void PmseRecordCursor::moveToNext(bool inNext) {
     auto cursor = _cur;
-    auto listNumber = (actual == -1 ? 0 : static_cast<int>(actual));
+    auto listNumber = (actual == -1 ? 0 : static_cast<int64_t>(actual));
     if(cursor != nullptr) {
         if(cursor->next != nullptr) {
             cursor = cursor->next;
@@ -345,9 +345,9 @@ void PmseRecordCursor::moveToLast() {
             }
         }
     } else {
-        int lastNonEmpty = -1;
-        int scope = (actual < 0 ? _mapper->_size : static_cast<int>(actual));
-        for (int i = 0; i < scope; ++i) {
+        int64_t lastNonEmpty = -1;
+        int64_t scope = (actual < 0 ? _mapper->_size : static_cast<int64_t>(actual));
+        for (int64_t i = 0; i < scope; ++i) {
             if (_mapper->_list[i]->size())
                 lastNonEmpty = i;
         }
