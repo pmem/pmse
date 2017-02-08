@@ -41,6 +41,7 @@
 
 #include <cmath>
 #include <string>
+#include <map>
 
 #include "mongo/platform/basic.h"
 #include "mongo/db/catalog/collection_options.h"
@@ -98,8 +99,8 @@ class PmseRecordCursor final : public SeekableRecordCursor {
 
 class PmseRecordStore : public RecordStore {
  public:
-    PmseRecordStore(StringData ns, const CollectionOptions& options,
-                    StringData dbpath);
+    PmseRecordStore(StringData ns, StringData ident, const CollectionOptions& options,
+                    StringData dbpath, std::map<StringData, pool_base> &pool_handler);
 
     ~PmseRecordStore();
 
@@ -219,7 +220,7 @@ class PmseRecordStore : public RecordStore {
 
  private:
     void deleteCappedAsNeeded(OperationContext* txn);
-
+    StringData _ident;
     CappedCallback* _cappedCallback;
     int64_t _storageSize = baseSize;
     CollectionOptions _options;

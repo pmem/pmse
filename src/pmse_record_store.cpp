@@ -52,37 +52,44 @@ using nvml::obj::transaction;
 namespace mongo {
 
 PmseRecordStore::PmseRecordStore(StringData ns,
+                                 StringData ident,
                                  const CollectionOptions& options,
-                                 StringData dbpath) :
-                RecordStore(ns), _cappedCallback(nullptr), _options(options), _DBPATH(dbpath) {
+                                 StringData dbpath,
+                                 std::map<StringData, pool_base> &pool_handler) :
+                RecordStore(ns), _ident(ident), _cappedCallback(nullptr), _options(options), _DBPATH(dbpath) {
     log() << "ns: " << ns;
-    std::string filename = _DBPATH.toString() + ns.toString();
-    boost::filesystem::path path;
-    log() << filename;
-    if (ns.toString() == "local.startup_log"
-                    && boost::filesystem::exists(filename)) {
-        log() << "Delete old startup log";
-        boost::filesystem::remove_all(filename);
-        boost::filesystem::remove_all(filename + "_mapper");
-    }
-
-    std::string mapper_filename = _DBPATH.toString() + ns.toString()
-                    + "_mapper";
-    if (!boost::filesystem::exists(mapper_filename.c_str())) {
-        log() << "Mapper create pool...";
-        mapPool = pool<root>::create(mapper_filename, "kvmapper",
-                                     (ns.toString() == "local.startup_log" ||
-                                      ns.toString() == "_mdb_catalog" ? 10 : 80)
-                                     * PMEMOBJ_MIN_POOL);
-        log() << "Create pool end";
+    if(pool_handler.count(ident) > 0) {
+        mapPool = pool<root>( pool_handler[ident] );
     } else {
-        log() << "Open pool...";
-        try {
-            mapPool = pool<root>::open(mapper_filename, "kvmapper");
-        } catch (std::exception &e) {
-            log() << "Error handled: " << e.what();
+        std::string filename = _DBPATH.toString() + ns.toString();
+        boost::filesystem::path path;
+        log() << filename;
+        if (ns.toString() == "local.startup_log"
+                        && boost::filesystem::exists(filename)) {
+            log() << "Delete old startup log";
+            boost::filesystem::remove_all(filename);
+            boost::filesystem::remove_all(filename + "_mapper");
         }
-        log() << "Open pool end...";
+
+        std::string mapper_filename = _DBPATH.toString() + ns.toString()
+                                    + "_mapper";
+        if (!boost::filesystem::exists(mapper_filename.c_str())) {
+            log() << "Mapper create pool...";
+            mapPool = pool<root>::create(mapper_filename, "kvmapper",
+                                         (ns.toString() == "local.startup_log" ||
+                                                         ns.toString() == "_mdb_catalog" ? 10 : 80)
+                                                         * PMEMOBJ_MIN_POOL);
+            log() << "Create pool end";
+        } else {
+            log() << "Open pool...";
+            try {
+                mapPool = pool<root>::open(mapper_filename, "kvmapper");
+            } catch (std::exception &e) {
+                log() << "Error handled: " << e.what();
+            }
+            log() << "Open pool end...";
+        }
+        pool_handler.insert(std::pair<StringData, pool_base>(ident, mapPool));
     }
     auto mapper_root = mapPool.get_root();
 
@@ -98,9 +105,8 @@ PmseRecordStore::PmseRecordStore(StringData ns,
     }
     try {
         _mapper = mapPool.get_root()->kvmap_root_ptr;
-
     } catch (std::exception& e) {
-        log() << "Error while creating PMStore engine";
+        log() << "Error while creating PmseRecordStore";
     };
 }
 
