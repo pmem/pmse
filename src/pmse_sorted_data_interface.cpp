@@ -41,19 +41,24 @@ namespace mongo {
 
 PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
                                                  const IndexDescriptor* desc,
-                                                 StringData dbpath) : _records(0) {
-    filepath = dbpath;
-    std::string filename = filepath.toString() + ident.toString();
-    _desc = desc;
-
-    if (access(filename.c_str(), F_OK) != 0) {
-        pm_pool = pool<PmseTree>::create(filename.c_str(), "pmse",
-                        10 * PMEMOBJ_MIN_POOL, 0666);
+                                                 StringData dbpath,
+                                                 std::map<StringData, pool_base> &pool_handler) : _records(0) {
+    if (pool_handler.count(ident) > 0) {
+        pm_pool = pool<PmseTree>(pool_handler[ident]);
     } else {
-        pm_pool = pool<PmseTree>::open(filename.c_str(), "pmse");
-    }
-    tree = pm_pool.get_root();
+        filepath = dbpath;
+        std::string filename = filepath.toString() + ident.toString();
+        _desc = desc;
 
+        if (access(filename.c_str(), F_OK) != 0) {
+            pm_pool = pool<PmseTree>::create(filename.c_str(), "pmse",
+                                             10 * PMEMOBJ_MIN_POOL, 0666);
+        } else {
+            pm_pool = pool<PmseTree>::open(filename.c_str(), "pmse");
+        }
+    }
+
+    tree = pm_pool.get_root();
 }
 
 /*

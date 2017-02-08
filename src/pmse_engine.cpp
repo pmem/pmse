@@ -54,7 +54,7 @@ Status PmseEngine::createRecordStore(OperationContext* opCtx, StringData ns, Str
                                      const CollectionOptions& options) {
     auto status = Status::OK();
     try {
-        auto record_store = stdx::make_unique<PmseRecordStore>(ns, options, _DBPATH);
+        auto record_store = stdx::make_unique<PmseRecordStore>(ns, ident, options, _DBPATH, _pool_handler);
         identList->insertKV(ident.toString().c_str(), ns.toString().c_str());
 
     } catch(std::exception &e) {
@@ -67,7 +67,7 @@ std::unique_ptr<RecordStore> PmseEngine::getRecordStore(OperationContext* opCtx,
                                                         StringData ns,
                                                         StringData ident,
                                                         const CollectionOptions& options) {
-    return stdx::make_unique<PmseRecordStore>(ns, options, _DBPATH);
+    return stdx::make_unique<PmseRecordStore>(ns, ident, options, _DBPATH, _pool_handler);
 }
 
 Status PmseEngine::createSortedDataInterface(OperationContext* opCtx,
@@ -79,7 +79,7 @@ Status PmseEngine::createSortedDataInterface(OperationContext* opCtx,
 SortedDataInterface* PmseEngine::getSortedDataInterface(OperationContext* opCtx,
                                                         StringData ident,
                                                         const IndexDescriptor* desc) {
-    return new PmseSortedDataInterface(ident, desc, _DBPATH);
+    return new PmseSortedDataInterface(ident, desc, _DBPATH, _pool_handler);
 }
 
 Status PmseEngine::dropIdent(OperationContext* opCtx, StringData ident) {
@@ -87,6 +87,7 @@ Status PmseEngine::dropIdent(OperationContext* opCtx, StringData ident) {
     boost::filesystem::path path(_DBPATH);
     const char* ns = identList->find(ident.toString().c_str(), status);
     identList->deleteKV(ident.toString().c_str());
+    _pool_handler[ident].close();
     if(!std::string(ns).empty()) {
         boost::filesystem::remove_all(path.string()+ns);
     }
