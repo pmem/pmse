@@ -102,7 +102,7 @@ class PmseRecordStore : public RecordStore {
     PmseRecordStore(StringData ns, StringData ident, const CollectionOptions& options,
                     StringData dbpath, std::map<StringData, pool_base> &pool_handler);
 
-    ~PmseRecordStore();
+    ~PmseRecordStore() = default;
 
     virtual const char* name() const {
         return storeName.c_str();
