@@ -67,12 +67,14 @@ std::unique_ptr<RecordStore> PmseEngine::getRecordStore(OperationContext* opCtx,
                                                         StringData ns,
                                                         StringData ident,
                                                         const CollectionOptions& options) {
+    //TODO: Update ns in identList when collection change its ns
     return stdx::make_unique<PmseRecordStore>(ns, ident, options, _DBPATH, _pool_handler);
 }
 
 Status PmseEngine::createSortedDataInterface(OperationContext* opCtx,
                                              StringData ident,
                                              const IndexDescriptor* desc) {
+    identList->insertKV(ident.toString().c_str(), "");
     return Status::OK();
 }
 
@@ -87,7 +89,7 @@ Status PmseEngine::dropIdent(OperationContext* opCtx, StringData ident) {
     boost::filesystem::path path(_DBPATH);
     const char* ns = identList->find(ident.toString().c_str(), status);
     identList->deleteKV(ident.toString().c_str());
-    _pool_handler[ident].close();
+//    _pool_handler[ident].close();  // TODO: consider
     if(!std::string(ns).empty()) {
         boost::filesystem::remove_all(path.string()+ns);
     }

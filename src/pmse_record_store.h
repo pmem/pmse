@@ -99,8 +99,10 @@ class PmseRecordCursor final : public SeekableRecordCursor {
 
 class PmseRecordStore : public RecordStore {
  public:
-    PmseRecordStore(StringData ns, StringData ident, const CollectionOptions& options,
-                    StringData dbpath, std::map<StringData, pool_base> &pool_handler);
+    PmseRecordStore(StringData ns, StringData ident,
+                    const CollectionOptions& options,
+                    StringData dbpath,
+                    std::map<std::string, pool_base> &pool_handler);
 
     ~PmseRecordStore() = default;
 

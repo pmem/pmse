@@ -42,9 +42,9 @@ namespace mongo {
 PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
                                                  const IndexDescriptor* desc,
                                                  StringData dbpath,
-                                                 std::map<StringData, pool_base> &pool_handler) : _records(0) {
-    if (pool_handler.count(ident) > 0) {
-        pm_pool = pool<PmseTree>(pool_handler[ident]);
+                                                 std::map<std::string, pool_base> &pool_handler) : _records(0) {
+    if (pool_handler.count(ident.toString()) > 0) {
+        pm_pool = pool<PmseTree>(pool_handler[ident.toString()]);
     } else {
         filepath = dbpath;
         std::string filename = filepath.toString() + ident.toString();
@@ -56,8 +56,8 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
         } else {
             pm_pool = pool<PmseTree>::open(filename.c_str(), "pmse");
         }
+        pool_handler.insert(std::pair<std::string, pool_base>(ident.toString(), pm_pool));
     }
-
     tree = pm_pool.get_root();
 }
 

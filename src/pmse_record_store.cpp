@@ -55,13 +55,15 @@ PmseRecordStore::PmseRecordStore(StringData ns,
                                  StringData ident,
                                  const CollectionOptions& options,
                                  StringData dbpath,
-                                 std::map<StringData, pool_base> &pool_handler) :
+                                 std::map<std::string, pool_base> &pool_handler) :
                 RecordStore(ns), _ident(ident), _cappedCallback(nullptr), _options(options), _DBPATH(dbpath) {
     log() << "ns: " << ns;
-    if(pool_handler.count(ident) > 0) {
-        mapPool = pool<root>( pool_handler[ident] );
+//    if(ns.toString() == "local.startup_log")
+//        pool_handler.erase(ident);
+    if(pool_handler.count(ident.toString()) > 0) {
+        mapPool = pool<root>( pool_handler[ident.toString()] );
     } else {
-        std::string filename = _DBPATH.toString() + ns.toString();
+        std::string filename = _DBPATH.toString() + ident.toString();
         boost::filesystem::path path;
         log() << filename;
         if (ns.toString() == "local.startup_log"
@@ -71,7 +73,7 @@ PmseRecordStore::PmseRecordStore(StringData ns,
             boost::filesystem::remove_all(filename + "_mapper");
         }
 
-        std::string mapper_filename = _DBPATH.toString() + ns.toString()
+        std::string mapper_filename = _DBPATH.toString() + ident.toString()
                                     + "_mapper";
         if (!boost::filesystem::exists(mapper_filename.c_str())) {
             log() << "Mapper create pool...";
@@ -89,7 +91,7 @@ PmseRecordStore::PmseRecordStore(StringData ns,
             }
             log() << "Open pool end...";
         }
-        pool_handler.insert(std::pair<StringData, pool_base>(ident, mapPool));
+        pool_handler.insert(std::pair<std::string, pool_base>(ident.toString(), mapPool));
     }
     auto mapper_root = mapPool.get_root();
 
