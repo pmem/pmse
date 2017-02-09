@@ -110,14 +110,6 @@ PmseRecordStore::PmseRecordStore(StringData ns,
     };
 }
 
-PmseRecordStore::~PmseRecordStore() {
-        try {
-            mapPool.close();
-        } catch (std::logic_error &e) {
-            log() << e.what();
-        }
-    }
-
 StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
                                                       const char* data, int len,
                                                       bool enforceQuota) {
