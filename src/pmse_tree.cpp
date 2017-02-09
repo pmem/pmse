@@ -139,6 +139,36 @@ void PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
             break;
         }
     }
+    //didn't find value in node - it must be in previous one - only for non-unique values
+    if(i==(node->num_keys))
+    {
+        if (dupsAllowed) {
+            if(node->previous)
+            {
+                node=node->previous;
+                i = node->num_keys-1;
+                while((key.woCompare(node->keys[i].getBSON(), _ordering, false)==0) && (node->values_array[i]).repr() != loc.repr())
+                {
+                    if(i>0)
+                    {
+                        i--;
+                    }
+                    else
+                    {
+                        if(node->previous)
+                        {
+                            node=node->previous;
+                            i = node->num_keys-1;
+                        }
+                        else
+                        {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     /*
      * Remove value
