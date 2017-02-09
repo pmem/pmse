@@ -154,7 +154,7 @@ public:
     void setJournalListener(JournalListener* jl) final {}
 
 private:
-    std::map<StringData, pool_base> _pool_handler;
+    std::map<std::string, pool_base> _pool_handler;
     std::shared_ptr<void> _catalogInfo;
     const std::string _DBPATH;
     PMEMobjpool *pm_pool = NULL;

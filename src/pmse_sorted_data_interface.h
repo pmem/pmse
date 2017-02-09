@@ -52,7 +52,7 @@ class PmseSortedDataInterface : public SortedDataInterface {
 public:
 
     PmseSortedDataInterface(StringData ident, const IndexDescriptor* desc,
-                            StringData dbpath, std::map<StringData, pool_base> &pool_handler);
+                            StringData dbpath, std::map<std::string, pool_base> &pool_handler);
 
     virtual SortedDataBuilderInterface* getBulkBuilder(OperationContext* txn,
                                                        bool dupsAllowed) override;
