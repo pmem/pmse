@@ -56,10 +56,9 @@ PmseRecordStore::PmseRecordStore(StringData ns,
                                  const CollectionOptions& options,
                                  StringData dbpath,
                                  std::map<std::string, pool_base> &pool_handler) :
-                RecordStore(ns), _ident(ident), _cappedCallback(nullptr), _options(options), _DBPATH(dbpath) {
+                RecordStore(ns), _cappedCallback(nullptr),
+                _options(options), _DBPATH(dbpath) {
     log() << "ns: " << ns;
-//    if(ns.toString() == "local.startup_log")
-//        pool_handler.erase(ident);
     if(pool_handler.count(ident.toString()) > 0) {
         mapPool = pool<root>( pool_handler[ident.toString()] );
     } else {
@@ -70,26 +69,20 @@ PmseRecordStore::PmseRecordStore(StringData ns,
                         && boost::filesystem::exists(filename)) {
             log() << "Delete old startup log";
             boost::filesystem::remove_all(filename);
-            boost::filesystem::remove_all(filename + "_mapper");
         }
 
-        std::string mapper_filename = _DBPATH.toString() + ident.toString()
-                                    + "_mapper";
+        std::string mapper_filename = _DBPATH.toString() + ident.toString();
         if (!boost::filesystem::exists(mapper_filename.c_str())) {
-            log() << "Mapper create pool...";
             mapPool = pool<root>::create(mapper_filename, "kvmapper",
                                          (ns.toString() == "local.startup_log" ||
                                                          ns.toString() == "_mdb_catalog" ? 10 : 80)
                                                          * PMEMOBJ_MIN_POOL);
-            log() << "Create pool end";
         } else {
-            log() << "Open pool...";
             try {
                 mapPool = pool<root>::open(mapper_filename, "kvmapper");
             } catch (std::exception &e) {
                 log() << "Error handled: " << e.what();
             }
-            log() << "Open pool end...";
         }
         pool_handler.insert(std::pair<std::string, pool_base>(ident.toString(), mapPool));
     }
