@@ -15,7 +15,9 @@ env.Library(
         'src/pmse_record_store.cpp',
         'src/pmse_sorted_data_interface.cpp',
         'src/pmse_tree.cpp',
-        'src/pmse_index_cursor.cpp'
+        'src/pmse_index_cursor.cpp',
+        'src/pmse_recovery_unit.cpp',
+        'src/pmse_change.cpp'
         ],
     LIBDEPS= [
         '$BUILD_DIR/mongo/base',

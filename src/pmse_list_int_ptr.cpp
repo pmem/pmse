@@ -39,6 +39,9 @@
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
 
 #include "pmse_list_int_ptr.h"
+#include "pmse_change.h"
+
+#include "mongo/db/storage/recovery_unit.h"
 
 #include <exception>
 
@@ -82,13 +85,13 @@ void PmseListIntPtr::insertKV(const persistent_ptr<KVPair> &key,
 }
 
 int64_t PmseListIntPtr::deleteKV(uint64_t key,
-                                 persistent_ptr<KVPair> &deleted) {
+                                 persistent_ptr<KVPair> &deleted, OperationContext* txn) {
     auto before = head;
     int64_t sizeFreed = 0;
     for (auto rec = head; rec != nullptr; rec = rec->next) {
         if (rec->idValue == key) {
             transaction::exec_tx(pop, [this, &deleted, &before,
-                                       &sizeFreed, &rec] {
+                                       &sizeFreed, &rec, &txn] {
                 if (before != head) {
                     before->next = rec->next;
                     if (before->next == nullptr)
@@ -117,6 +120,8 @@ int64_t PmseListIntPtr::deleteKV(uint64_t key,
                     rec->next = nullptr;
                     deleted = rec;
                 }
+                if(txn)
+                    txn->recoveryUnit()->registerChange(new RemoveChange(pop, *(deleted->ptr)));
                 sizeFreed = pmemobj_alloc_usable_size(deleted->ptr.raw());
                 delete_persistent<InitData>(deleted->ptr);
             });
