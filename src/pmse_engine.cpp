@@ -46,9 +46,31 @@
 #include "pmse_engine.h"
 
 #include <cstdlib>
-#include <iostream>
 
 namespace mongo {
+
+PmseEngine::PmseEngine(std::string dbpath) : _DBPATH(dbpath) {
+    std::string path = _DBPATH+_IDENT_FILENAME.toString();
+    if (!boost::filesystem::exists(path)) {
+        pop = pool<PmseList>::create(path, "identList", PMEMOBJ_MIN_POOL,
+                                         S_IRWXU);
+        log() << "Engine pool created";
+    } else {
+        pop = pool<PmseList>::open(path, "identList");
+        log() << "Open pool...";
+    }
+
+    try {
+        identList = pop.get_root();
+    } catch (std::exception& e) {
+        log() << "Error while creating PMSE engine:" << e.what() << std::endl;
+    };
+    identList->setPool(pop);
+}
+
+PmseEngine::~PmseEngine() {
+    pop.close();
+}
 
 Status PmseEngine::createRecordStore(OperationContext* opCtx, StringData ns, StringData ident,
                                      const CollectionOptions& options) {
@@ -85,15 +107,10 @@ SortedDataInterface* PmseEngine::getSortedDataInterface(OperationContext* opCtx,
 }
 
 Status PmseEngine::dropIdent(OperationContext* opCtx, StringData ident) {
-    bool status;
     boost::filesystem::path path(_DBPATH);
-    const char* ns = identList->find(ident.toString().c_str(), status);
     identList->deleteKV(ident.toString().c_str());
-//    _pool_handler[ident].close();  // TODO: consider
-    if(!std::string(ns).empty()) {
-        boost::filesystem::remove_all(path.string()+ns);
-    }
-    boost::filesystem::remove_all(path.string()+ns+"_mapper");
+    _pool_handler[ident.toString()].close();
+    _pool_handler.erase(ident.toString());
     boost::filesystem::remove_all(path.string()+ident.toString());
     return Status::OK();
 }

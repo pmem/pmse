@@ -65,29 +65,9 @@ struct ident_entry {
 
 class PmseEngine : public KVEngine {
 public:
-    PmseEngine(std::string dbpath) : _DBPATH(dbpath) {
-        std::cout << "createRecordStore constructor\n";
-        std::string path = _DBPATH+_IDENT_FILENAME.toString();
-        if (!boost::filesystem::exists(path)) {
-            std::cout << "Create pool..." << std::endl;
-            pop = pool<PmseList>::create(path, "identList", PMEMOBJ_MIN_POOL,
-                                             S_IRWXU);
-            std::cout << "Create pool end" << std::endl;
-        } else {
-            pop = pool<PmseList>::open(path, "identList");
-            std::cout << "Open pool..." << std::endl;
-        }
+    PmseEngine(std::string dbpath);
 
-        try {
-            identList = pop.get_root();
-        } catch (std::exception& e) {
-            std::cout << "Error while creating PMStore engine:" << e.what() << std::endl;
-        };
-        identList->setPool(pop);
-    }
-    virtual ~PmseEngine() {
-        pop.close();
-    }
+    virtual ~PmseEngine();
 
     virtual RecoveryUnit* newRecoveryUnit() {
         // TODO: Implement RecoveryUnit
@@ -140,12 +120,10 @@ public:
     }
 
     virtual bool hasIdent(OperationContext* opCtx, StringData ident) const {
-        std::cout << "hasIdent" << std::endl;
         return identList->hasKey(ident.toString().c_str());
     }
 
     std::vector<std::string> getAllIdents(OperationContext* opCtx) const {
-        std::cout << "getAllIdents" << std::endl;
         return identList->getKeys();
     }
 

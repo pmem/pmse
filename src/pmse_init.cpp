@@ -30,6 +30,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
+
 #include "pmse_engine.h"
 
 #include "mongo/base/init.h"
@@ -38,6 +40,7 @@
 #include "mongo/db/storage/devnull/devnull_kv_engine.h"
 #include "mongo/db/storage/kv/kv_storage_engine.h"
 #include "mongo/db/storage/storage_options.h"
+#include "mongo/util/log.h"
 
 #include <iostream>
 
@@ -55,7 +58,7 @@ public:
         KVStorageEngineOptions options;
         options.directoryPerDB = params.directoryperdb;
         options.forRepair = params.repair;
-        std::cout << params.dbpath << std::endl;
+        log() << params.dbpath;
         return new KVStorageEngine(new PmseEngine(params.dbpath), options);
     }
 
