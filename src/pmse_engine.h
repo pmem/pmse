@@ -98,6 +98,11 @@ public:
         return true;
     }
 
+    virtual Status beginBackup(OperationContext* txn)
+    {
+        return Status::OK();
+    }
+
     virtual bool supportsDirectoryPerDB() const {
         return false;
     }
