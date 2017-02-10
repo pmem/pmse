@@ -134,11 +134,11 @@ public:
         return _list[id % _size]->getPair(id, value);
     }
 
-    bool remove(uint64_t id) {
+    bool remove(uint64_t id, OperationContext* txn = nullptr) {
         persistent_ptr<T> temp;
         if(find(id, temp))
             _dataSize -= pmemobj_alloc_usable_size(temp.raw());
-        _list[id % _size]->deleteKV(id, _deleted);
+        _list[id % _size]->deleteKV(id, _deleted, txn);
         _hashmapSize--;
         return true;
     }

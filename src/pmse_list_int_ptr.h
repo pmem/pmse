@@ -47,6 +47,8 @@
 #include <libpmemobj++/transaction.hpp>
 #include <libpmemobj++/utils.hpp>
 
+#include "mongo/db/operation_context.h"
+
 #include <vector>
 
 using namespace nvml::obj;
@@ -77,7 +79,7 @@ class PmseListIntPtr {
     bool find(uint64_t key, persistent_ptr<InitData> &item_ptr);
     bool getPair(uint64_t key, persistent_ptr<KVPair> &item_ptr);
     void update(uint64_t key, const persistent_ptr<InitData> &value);
-    int64_t deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted);
+    int64_t deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted, OperationContext* txn);
     bool hasKey(uint64_t key);
     void clear();
     void setPool();
