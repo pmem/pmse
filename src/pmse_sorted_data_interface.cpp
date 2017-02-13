@@ -43,13 +43,12 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
                                                  const IndexDescriptor* desc,
                                                  StringData dbpath,
                                                  std::map<std::string, pool_base> &pool_handler) : _records(0) {
+    _desc = desc;
     if (pool_handler.count(ident.toString()) > 0) {
         pm_pool = pool<PmseTree>(pool_handler[ident.toString()]);
     } else {
         filepath = dbpath;
         std::string filename = filepath.toString() + ident.toString();
-        _desc = desc;
-
         if (access(filename.c_str(), F_OK) != 0) {
             pm_pool = pool<PmseTree>::create(filename.c_str(), "pmse",
                                              10 * PMEMOBJ_MIN_POOL, 0666);
