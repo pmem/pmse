@@ -38,11 +38,6 @@
 
 namespace mongo {
 
-    PmseRecoveryUnit::PmseRecoveryUnit()
-    {
-
-    }
-
     void PmseRecoveryUnit::commitUnitOfWork() {
         try {
             for (Changes::iterator it = _changes.begin(), end = _changes.end(); it != end; ++it) {
@@ -50,7 +45,7 @@ namespace mongo {
             }
             _changes.clear();
         } catch (...) {
-            std::terminate();
+            throw;
         }
     }
 
@@ -63,7 +58,7 @@ namespace mongo {
             }
             _changes.clear();
         } catch (...) {
-            std::terminate();
+            throw;
         }
     }
 

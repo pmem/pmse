@@ -120,8 +120,7 @@ int64_t PmseListIntPtr::deleteKV(uint64_t key,
                     rec->next = nullptr;
                     deleted = rec;
                 }
-                if(txn)
-                {
+                if (txn) {
                     txn->recoveryUnit()->registerChange(new RemoveChange(pop, (deleted->ptr).get()));
                 }
                 sizeFreed = pmemobj_alloc_usable_size(deleted->ptr.raw());
