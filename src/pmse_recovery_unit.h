@@ -42,7 +42,6 @@ public:
     PmseRecoveryUnit();
 
     virtual void beginUnitOfWork(OperationContext* opCtx) {
-        std::cout << "Begin unit of work" << std::endl;
     };
     virtual void commitUnitOfWork();
     virtual void abortUnitOfWork();
@@ -51,7 +50,6 @@ public:
     virtual SnapshotId getSnapshotId() const {
         return SnapshotId();};
     virtual void registerChange(Change* change){
-        std::cout << "Register change" << std::endl;
         _changes.push_back(ChangePtr(change));
     };
     virtual void* writingPtr(void* data, size_t len) {return nullptr;};
@@ -62,15 +60,5 @@ private:
     Changes _changes;
 };
 
-class PmseChange : public RecoveryUnit::Change {
-public:
-    PmseChange();
-    virtual void commit() {
-        std::cout << "Change commit" << std::endl;
-    }
-    virtual void rollback() {
-        std::cout << "Change rollback" << std::endl;
-    }
-};
 }
 #endif /* SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_RECOVERY_UNIT_H_ */

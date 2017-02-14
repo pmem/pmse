@@ -58,12 +58,13 @@ private:
 class RemoveChange : public RecoveryUnit::Change
 {
 public:
-    RemoveChange(pool_base pop, InitData data);
+    RemoveChange(pool_base pop, InitData* data);
+    ~RemoveChange();
     virtual void rollback();
     virtual void commit();
 private:
     pool_base _pop;
-    InitData _data;
+    InitData *_cachedData;
     persistent_ptr<PmseMap<InitData>> _mapper;
 
 };
