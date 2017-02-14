@@ -57,7 +57,7 @@ PmseEngine::PmseEngine(std::string dbpath) : _DBPATH(dbpath) {
         log() << "Engine pool created";
     } else {
         pop = pool<PmseList>::open(path, "identList");
-        log() << "Open pool...";
+        log() << "Engine pool opened";
     }
 
     try {
@@ -83,7 +83,7 @@ Status PmseEngine::createRecordStore(OperationContext* opCtx, StringData ns, Str
         identList->insertKV(ident.toString().c_str(), ns.toString().c_str());
 
     } catch(std::exception &e) {
-        status = Status(ErrorCodes::BadValue, e.what());
+        status = Status(ErrorCodes::OutOfDiskSpace, e.what());
     }
     return status;
 }
@@ -99,7 +99,12 @@ std::unique_ptr<RecordStore> PmseEngine::getRecordStore(OperationContext* opCtx,
 Status PmseEngine::createSortedDataInterface(OperationContext* opCtx,
                                              StringData ident,
                                              const IndexDescriptor* desc) {
-    identList->insertKV(ident.toString().c_str(), "");
+    try {
+        auto sorted_data_interface = PmseSortedDataInterface(ident, desc, _DBPATH, _pool_handler);
+        identList->insertKV(ident.toString().c_str(), "");
+    } catch (std::exception &e) {
+        return Status(ErrorCodes::OutOfDiskSpace, e.what());
+    }
     return Status::OK();
 }
 
@@ -112,8 +117,10 @@ SortedDataInterface* PmseEngine::getSortedDataInterface(OperationContext* opCtx,
 Status PmseEngine::dropIdent(OperationContext* opCtx, StringData ident) {
     boost::filesystem::path path(_DBPATH);
     identList->deleteKV(ident.toString().c_str());
-    _pool_handler[ident.toString()].close();
-    _pool_handler.erase(ident.toString());
+    if ( _pool_handler.count(ident.toString()) > 0 ) {
+        _pool_handler[ident.toString()].close();
+        _pool_handler.erase(ident.toString());
+    }
     boost::filesystem::remove_all(path.string()+ident.toString());
     return Status::OK();
 }

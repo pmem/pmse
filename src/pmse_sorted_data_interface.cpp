@@ -44,20 +44,27 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
                                                  StringData dbpath,
                                                  std::map<std::string, pool_base> &pool_handler) : _records(0) {
     _desc = desc;
-    if (pool_handler.count(ident.toString()) > 0) {
-        pm_pool = pool<PmseTree>(pool_handler[ident.toString()]);
-    } else {
-        filepath = dbpath;
-        std::string filename = filepath.toString() + ident.toString();
-        if (access(filename.c_str(), F_OK) != 0) {
-            pm_pool = pool<PmseTree>::create(filename.c_str(), "pmse",
-                                             10 * PMEMOBJ_MIN_POOL, 0666);
+    try {
+        if (pool_handler.count(ident.toString()) > 0) {
+            pm_pool = pool<PmseTree>(pool_handler[ident.toString()]);
         } else {
-            pm_pool = pool<PmseTree>::open(filename.c_str(), "pmse");
+            filepath = dbpath;
+            std::string filename = filepath.toString() + ident.toString();
+            _desc = desc;
+
+            if (access(filename.c_str(), F_OK) != 0) {
+                pm_pool = pool<PmseTree>::create(filename.c_str(), "pmse",
+                                                 10 * PMEMOBJ_MIN_POOL, 0666);
+            } else {
+                pm_pool = pool<PmseTree>::open(filename.c_str(), "pmse");
+            }
+            pool_handler.insert(std::pair<std::string, pool_base>(ident.toString(), pm_pool));
         }
-        pool_handler.insert(std::pair<std::string, pool_base>(ident.toString(), pm_pool));
+        tree = pm_pool.get_root();
+    } catch (std::exception &e) {
+        log() << "Error handled: " << e.what();
+        throw;
     }
-    tree = pm_pool.get_root();
 }
 
 /*

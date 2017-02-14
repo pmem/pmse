@@ -73,15 +73,21 @@ PmseRecordStore::PmseRecordStore(StringData ns,
 
         std::string mapper_filename = _DBPATH.toString() + ident.toString();
         if (!boost::filesystem::exists(mapper_filename.c_str())) {
-            mapPool = pool<root>::create(mapper_filename, "kvmapper",
-                                         (ns.toString() == "local.startup_log" ||
-                                                         ns.toString() == "_mdb_catalog" ? 10 : 80)
-                                                         * PMEMOBJ_MIN_POOL);
+            try {
+                mapPool = pool<root>::create(mapper_filename, "kvmapper",
+                                             (ns.toString() == "local.startup_log" ||
+                                                             ns.toString() == "_mdb_catalog" ? 10 : 80)
+                                                             * PMEMOBJ_MIN_POOL);
+            } catch (std::exception &e) {
+                log() << "Error handled: " << e.what();
+                throw;
+            }
         } else {
             try {
                 mapPool = pool<root>::open(mapper_filename, "kvmapper");
             } catch (std::exception &e) {
                 log() << "Error handled: " << e.what();
+                throw;
             }
         }
         pool_handler.insert(std::pair<std::string, pool_base>(ident.toString(), mapPool));
