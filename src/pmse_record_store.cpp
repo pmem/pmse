@@ -37,7 +37,6 @@
 #include "mongo/db/storage/recovery_unit.h"
 #include "mongo/db/operation_context.h"
 
-
 #include "pmse_record_store.h"
 #include "pmse_change.h"
 

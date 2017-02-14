@@ -88,11 +88,10 @@ int64_t PmseListIntPtr::deleteKV(uint64_t key,
                                  persistent_ptr<KVPair> &deleted, OperationContext* txn) {
     auto before = head;
     int64_t sizeFreed = 0;
-    InitData data;
     for (auto rec = head; rec != nullptr; rec = rec->next) {
         if (rec->idValue == key) {
             transaction::exec_tx(pop, [this, &deleted, &before,
-                                       &sizeFreed, &rec, &txn, &data] {
+                                       &sizeFreed, &rec, &txn] {
                 if (before != head) {
                     before->next = rec->next;
                     if (before->next == nullptr)

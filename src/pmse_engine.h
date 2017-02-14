@@ -41,7 +41,6 @@
 #include <unordered_set>
 
 #include "mongo/db/storage/kv/kv_engine.h"
-#include "mongo/db/storage/recovery_unit_noop.h"
 
 #include "pmse_list.h"
 #include "pmse_recovery_unit.h"
@@ -72,8 +71,6 @@ public:
     virtual ~PmseEngine();
 
     virtual RecoveryUnit* newRecoveryUnit() {
-        // TODO: Implement RecoveryUnit
-        //return new RecoveryUnitNoop();
         return new PmseRecoveryUnit();
     }
 
