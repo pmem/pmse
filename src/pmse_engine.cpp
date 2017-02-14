@@ -69,6 +69,9 @@ PmseEngine::PmseEngine(std::string dbpath) : _DBPATH(dbpath) {
 }
 
 PmseEngine::~PmseEngine() {
+    for (auto p : _pool_handler) {
+        p.second.close();
+    }
     pop.close();
 }
 

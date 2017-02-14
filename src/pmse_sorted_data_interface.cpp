@@ -43,6 +43,7 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
                                                  const IndexDescriptor* desc,
                                                  StringData dbpath,
                                                  std::map<std::string, pool_base> &pool_handler) : _records(0) {
+    _desc = desc;
     try {
         if (pool_handler.count(ident.toString()) > 0) {
             pm_pool = pool<PmseTree>(pool_handler[ident.toString()]);
