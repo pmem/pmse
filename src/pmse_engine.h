@@ -66,29 +66,9 @@ struct ident_entry {
 
 class PmseEngine : public KVEngine {
 public:
-    PmseEngine(std::string dbpath) : _DBPATH(dbpath) {
-        std::cout << "createRecordStore constructor\n";
-        std::string path = _DBPATH+_IDENT_FILENAME.toString();
-        if (!boost::filesystem::exists(path)) {
-            std::cout << "Create pool..." << std::endl;
-            pop = pool<PmseList>::create(path, "identList", PMEMOBJ_MIN_POOL,
-                                             S_IRWXU);
-            std::cout << "Create pool end" << std::endl;
-        } else {
-            pop = pool<PmseList>::open(path, "identList");
-            std::cout << "Open pool..." << std::endl;
-        }
+    PmseEngine(std::string dbpath);
 
-        try {
-            identList = pop.get_root();
-        } catch (std::exception& e) {
-            std::cout << "Error while creating PMStore engine:" << e.what() << std::endl;
-        };
-        identList->setPool(pop);
-    }
-    virtual ~PmseEngine() {
-        pop.close();
-    }
+    virtual ~PmseEngine();
 
     virtual RecoveryUnit* newRecoveryUnit() {
         return new PmseRecoveryUnit();
@@ -118,6 +98,11 @@ public:
         return true;
     }
 
+    virtual Status beginBackup(OperationContext* txn)
+    {
+        return Status::OK();
+    }
+
     virtual bool supportsDirectoryPerDB() const {
         return false;
     }
@@ -140,12 +125,10 @@ public:
     }
 
     virtual bool hasIdent(OperationContext* opCtx, StringData ident) const {
-        std::cout << "hasIdent" << std::endl;
         return identList->hasKey(ident.toString().c_str());
     }
 
     std::vector<std::string> getAllIdents(OperationContext* opCtx) const {
-        std::cout << "getAllIdents" << std::endl;
         return identList->getKeys();
     }
 
@@ -154,6 +137,7 @@ public:
     void setJournalListener(JournalListener* jl) final {}
 
 private:
+    std::map<std::string, pool_base> _pool_handler;
     std::shared_ptr<void> _catalogInfo;
     const std::string _DBPATH;
     PMEMobjpool *pm_pool = NULL;
