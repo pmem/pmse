@@ -48,24 +48,31 @@ namespace mongo {
         _mapper->remove((uint64_t) _loc.repr());
     }
 
-    RemoveChange::RemoveChange(pool_base pop, InitData data) : _pop(pop), _data(data)
+    RemoveChange::RemoveChange(pool_base pop, InitData* data) : _pop(pop)
     {
-        //_mapper = pool<root>(_pop).get_root()->kvmap_root_ptr;
+        _cachedData = (InitData*)malloc(sizeof(InitData)+data->size);
+        memcpy(_cachedData->data, data->data, data->size);
+        _cachedData->size = data->size;
     }
+    RemoveChange::~RemoveChange()
+    {
+        free(_cachedData);
+    }
+
     void RemoveChange::commit() {}
     void RemoveChange::rollback() {
         persistent_ptr<InitData> obj;
         uint64_t id = 0;
+        _mapper = pool<root>(_pop).get_root()->kvmap_root_ptr;
         try {
             transaction::exec_tx(_pop, [&] {
-                obj = pmemobj_tx_alloc(sizeof(InitData::size) + _data.size, 1);
-                obj->size = _data.size;
-                memcpy(obj->data, _data.data, _data.size);
+                obj = pmemobj_tx_alloc(sizeof(InitData::size) + _cachedData->size, 1);
+                obj->size = _cachedData->size;
+                memcpy(obj->data, _cachedData->data, _cachedData->size);
             });
         } catch (std::exception &e) {
 
         }
-
         id = _mapper->insert(obj);
     }
 

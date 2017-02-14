@@ -251,5 +251,9 @@ private:
         return temp;
     }
 };
+
+struct root {
+    persistent_ptr<PmseMap<InitData>> kvmap_root_ptr;
+};
 }
 #endif /* SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_MAP_H_ */
