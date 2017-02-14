@@ -34,9 +34,9 @@
 
 #include "mongo/db/storage/recovery_unit.h"
 #include "mongo/db/operation_context.h"
+#include "mongo/util/log.h"
 
 #include "pmse_change.h"
-
 
 #include <libpmemobj++/transaction.hpp>
 
@@ -48,8 +48,7 @@ namespace mongo {
         _mapper->remove((uint64_t) _loc.repr());
     }
 
-    RemoveChange::RemoveChange(pool_base pop, InitData* data) : _pop(pop)
-    {
+    RemoveChange::RemoveChange(pool_base pop, InitData* data) : _pop(pop)   {
         _cachedData = (InitData*)malloc(sizeof(InitData)+data->size);
         memcpy(_cachedData->data, data->data, data->size);
         _cachedData->size = data->size;
@@ -71,7 +70,7 @@ namespace mongo {
                 memcpy(obj->data, _cachedData->data, _cachedData->size);
             });
         } catch (std::exception &e) {
-
+            log() << e.what();
         }
         id = _mapper->insert(obj);
     }

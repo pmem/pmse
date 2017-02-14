@@ -39,7 +39,7 @@ namespace mongo {
 
 class PmseRecoveryUnit : public RecoveryUnit {
 public:
-    PmseRecoveryUnit();
+    PmseRecoveryUnit() = default;
 
     virtual void beginUnitOfWork(OperationContext* opCtx) {
     };
