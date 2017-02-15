@@ -34,6 +34,7 @@
 
 #include "pmse_sorted_data_interface.h"
 #include "pmse_index_cursor.h"
+#include "pmse_change.h"
 
 #include "mongo/util/log.h"
 
@@ -42,7 +43,7 @@ namespace mongo {
 PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
                                                  const IndexDescriptor* desc,
                                                  StringData dbpath,
-                                                 std::map<std::string, pool_base> &pool_handler) : _records(0) {
+                                                 std::map<std::string, pool_base> &pool_handler) {
     _desc = desc;
     try {
         if (pool_handler.count(ident.toString()) > 0) {
@@ -88,8 +89,9 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
         });
 
         bsonPM.data = obj;
+        txn->recoveryUnit()->registerChange(new InsertIndexChange(tree, pm_pool, key, loc, dupsAllowed,_desc));
         status = tree->insert(pm_pool, bsonPM, loc, _desc->keyPattern(), dupsAllowed);
-        ++_records;
+        ++tree->_records;
     } catch (std::exception &e) {
         log() << e.what();
     }
@@ -107,7 +109,7 @@ void PmseSortedDataInterface::unindex(OperationContext* txn, const BSONObj& key,
         [&] {
             tree->remove(pm_pool, owned, loc, dupsAllowed, _desc->keyPattern());
         });
-        --_records;
+        --tree->_records;
     } catch (std::exception &e) {
         log() << e.what();
     }

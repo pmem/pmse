@@ -101,4 +101,29 @@ namespace mongo {
         id = _mapper->updateKV(_key, obj);
     }
 
+    InsertIndexChange::InsertIndexChange(persistent_ptr<PmseTree> tree,
+                                     pool<PmseTree> pm_pool, BSONObj key,
+                                     RecordId loc, bool dupsAllowed,
+                                     const IndexDescriptor* desc) :
+                                _tree(tree),
+                                _pm_pool(pm_pool),
+                                _key(key),
+                                _loc(loc),
+                                _dupsAllowed(dupsAllowed),
+                                _desc(desc) {
+    }
+    void InsertIndexChange::commit() {}
+    void InsertIndexChange::rollback() {
+        try {
+            transaction::exec_tx(_pm_pool,
+
+                [&] {
+                _tree->remove(_pm_pool, _key, _loc, _dupsAllowed, _desc->keyPattern());
+                --(_tree->_records);
+            });
+        } catch (std::exception &e) {
+                log() << e.what();
+            }
+        }
+
 }

@@ -37,10 +37,12 @@
 #include "libpmemobj.h"
 #include <libpmemobj++/p.hpp>
 #include <libpmemobj++/persistent_ptr.hpp>
+
 #include "pmse_map.h"
+#include "pmse_tree.h"
 
 #include "mongo/db/record_id.h"
-
+#include "mongo/db/index/index_descriptor.h"
 
 namespace mongo {
 
@@ -81,6 +83,22 @@ private:
     uint64_t _key;
     InitData *_cachedData;
     persistent_ptr<PmseMap<InitData>> _mapper;
+
+};
+
+class InsertIndexChange : public RecoveryUnit::Change
+{
+public:
+    InsertIndexChange(persistent_ptr<PmseTree> tree,pool<PmseTree> pm_pool,BSONObj key,RecordId loc,bool dupsAllowed,const IndexDescriptor* desc);
+    virtual void rollback();
+    virtual void commit();
+private:
+    persistent_ptr<PmseTree> _tree;
+    pool<PmseTree> _pm_pool;
+    BSONObj _key;
+    RecordId _loc;
+    bool _dupsAllowed;
+    const IndexDescriptor*_desc;
 
 };
 
