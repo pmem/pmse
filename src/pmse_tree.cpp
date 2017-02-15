@@ -39,8 +39,8 @@
 
 #include "pmse_tree.h"
 #include "pmse_sorted_data_interface.h"
+#include "pmse_change.h"
 
-#include "errno.h"
 #include "libpmemobj++/transaction.hpp"
 #include "libpmemobj++/make_persistent_array.hpp"
 
@@ -95,7 +95,7 @@ Status PmseTree::dupKeyCheck(pool_base pop,BSONObj& key, const RecordId& loc)
 
 
 void PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
-                      bool dupsAllowed, const BSONObj& ordering) {
+                      bool dupsAllowed, const BSONObj& ordering, OperationContext* txn = nullptr) {
 
     persistent_ptr<PmseTreeNode> node;
     RecordId key_record;
@@ -103,7 +103,6 @@ void PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
     uint64_t i;
     int64_t cmp;
     _ordering = ordering;
-
     //find node with key
     node = locateLeafWithKey(root, key, _ordering);
     //find place in node
@@ -173,6 +172,8 @@ void PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
     /*
      * Remove value
      */
+    if(txn)
+        txn->recoveryUnit()->registerChange(new RemoveIndexChange(pop, key, loc, dupsAllowed, ordering));
 
     root = deleteEntry(pop, key, node, i);
 }
@@ -553,14 +554,12 @@ persistent_ptr<PmseTreeNode> PmseTree::removeEntryFromNode(
                 BSONObj& key, persistent_ptr<PmseTreeNode> node,
                 uint64_t index) {
     uint64_t i, num_pointers;
+
     // Remove the key and shift other keys accordingly.
-
     i = index;
-
     BSONObj_PM bsonPM;
     bsonPM = (node->keys[i]);
     pmemobj_tx_free(bsonPM.data.raw());
-
     i = index;
     for (++i; i < node->num_keys; i++) {
         node->keys[i - 1] = node->keys[i];

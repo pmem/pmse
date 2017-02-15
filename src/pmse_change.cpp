@@ -102,28 +102,59 @@ namespace mongo {
     }
 
     InsertIndexChange::InsertIndexChange(persistent_ptr<PmseTree> tree,
-                                     pool<PmseTree> pm_pool, BSONObj key,
-                                     RecordId loc, bool dupsAllowed,
-                                     const IndexDescriptor* desc) :
-                                _tree(tree),
-                                _pm_pool(pm_pool),
-                                _key(key),
-                                _loc(loc),
-                                _dupsAllowed(dupsAllowed),
-                                _desc(desc) {
+                                         pool_base pop, BSONObj key,
+                                         RecordId loc, bool dupsAllowed,
+                                         const IndexDescriptor* desc) :
+                                    _tree(tree),
+                                    _pop(pop),
+                                    _key(key),
+                                    _loc(loc),
+                                    _dupsAllowed(dupsAllowed),
+                                    _desc(desc) {
     }
-    void InsertIndexChange::commit() {}
+    void InsertIndexChange::commit() {
+    }
     void InsertIndexChange::rollback() {
         try {
-            transaction::exec_tx(_pm_pool,
+            transaction::exec_tx(_pop,
 
+                            [&] {
+                                _tree->remove(_pop, _key, _loc, _dupsAllowed, _desc->keyPattern(), nullptr);
+                                --(_tree->_records);
+                            });
+        } catch (std::exception &e) {
+            log() << e.what();
+        }
+    }
+    RemoveIndexChange::RemoveIndexChange(pool_base pop, BSONObj key,RecordId loc, bool dupsAllowed, BSONObj ordering) :
+                                    _pop(pop),
+                                    _key(key),
+                                    _loc(loc),
+                                    _dupsAllowed(dupsAllowed),
+                                    _ordering(ordering) {
+    }
+    void RemoveIndexChange::commit() {}
+    void RemoveIndexChange::rollback() {
+        persistent_ptr<char> obj;
+        Status status = Status::OK();
+        BSONObj_PM bsonPM;
+        _tree = pool<PmseTree>(_pop).get_root();
+
+        try {
+            transaction::exec_tx(_pop,
                 [&] {
-                _tree->remove(_pm_pool, _key, _loc, _dupsAllowed, _desc->keyPattern());
-                --(_tree->_records);
+                obj = pmemobj_tx_alloc(_key.objsize(), 1);
+                memcpy( (void*)obj.get(), _key.objdata(), _key.objsize());
+                bsonPM.data = obj;
+                status = _tree->insert(_pop, bsonPM, _loc, _ordering, _dupsAllowed);
+                if(status == Status::OK())
+                {
+                    ++_tree->_records;
+                }
             });
         } catch (std::exception &e) {
                 log() << e.what();
             }
-        }
+    }
 
 }

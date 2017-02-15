@@ -117,7 +117,7 @@ public:
     Status insert(pool_base pop, BSONObj_PM& key, const RecordId& loc,
                   const BSONObj& _ordering, bool dupsAllowed);
     void remove(pool_base pop, BSONObj& key, const RecordId& loc,
-                bool dupsAllowed, const BSONObj& _ordering);
+                bool dupsAllowed, const BSONObj& _ordering, OperationContext* txn);
 
     Status dupKeyCheck(pool_base pop,BSONObj& key, const RecordId& loc);
     p<int> _records = 0;

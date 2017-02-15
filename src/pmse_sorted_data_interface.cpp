@@ -89,9 +89,12 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
         });
 
         bsonPM.data = obj;
-        txn->recoveryUnit()->registerChange(new InsertIndexChange(tree, pm_pool, key, loc, dupsAllowed,_desc));
         status = tree->insert(pm_pool, bsonPM, loc, _desc->keyPattern(), dupsAllowed);
-        ++tree->_records;
+        if(status == Status::OK())
+        {
+            ++tree->_records;
+            txn->recoveryUnit()->registerChange(new InsertIndexChange(tree, pm_pool, key, loc, dupsAllowed,_desc));
+        }
     } catch (std::exception &e) {
         log() << e.what();
     }
@@ -107,7 +110,7 @@ void PmseSortedDataInterface::unindex(OperationContext* txn, const BSONObj& key,
     try {
         transaction::exec_tx(pm_pool,
         [&] {
-            tree->remove(pm_pool, owned, loc, dupsAllowed, _desc->keyPattern());
+            tree->remove(pm_pool, owned, loc, dupsAllowed, _desc->keyPattern(), txn);
         });
         --tree->_records;
     } catch (std::exception &e) {
