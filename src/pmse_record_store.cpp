@@ -155,7 +155,7 @@ Status PmseRecordStore::updateRecord(OperationContext* txn, const RecordId& oldL
             obj = pmemobj_tx_alloc(sizeof(InitData::size) + len, 1);
             obj->size = len;
             memcpy(obj->data, data, len);
-            _mapper->updateKV(oldLocation.repr(), obj);
+            _mapper->updateKV(oldLocation.repr(), obj, txn);
             deleteCappedAsNeeded(txn);
         });
     } catch (std::exception &e) {

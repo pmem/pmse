@@ -78,7 +78,7 @@ class PmseListIntPtr {
                   const persistent_ptr<InitData> &value);
     bool find(uint64_t key, persistent_ptr<InitData> &item_ptr);
     bool getPair(uint64_t key, persistent_ptr<KVPair> &item_ptr);
-    void update(uint64_t key, const persistent_ptr<InitData> &value);
+    void update(uint64_t key, const persistent_ptr<InitData> &value, OperationContext* txn);
     int64_t deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted, OperationContext* txn);
     bool hasKey(uint64_t key);
     void clear();
