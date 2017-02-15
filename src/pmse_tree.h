@@ -120,7 +120,7 @@ public:
                 bool dupsAllowed, const BSONObj& _ordering);
 
     Status dupKeyCheck(pool_base pop,BSONObj& key, const RecordId& loc);
-
+    p<int> _records = 0;
 private:
     uint64_t cut(uint64_t length);
     void placeAfter(PMEMobjpool *pm_pool, BSONObj& key, const RecordId& loc);
