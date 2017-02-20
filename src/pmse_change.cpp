@@ -75,5 +75,30 @@ namespace mongo {
         id = _mapper->insert(obj);
     }
 
+    UpdateChange::UpdateChange(pool_base pop, uint64_t key, InitData* data) : _pop(pop), _key(key)   {
+        _cachedData = (InitData*)malloc(sizeof(InitData)+data->size);
+        memcpy(_cachedData->data, data->data, data->size);
+        _cachedData->size = data->size;
+    }
+    UpdateChange::~UpdateChange()
+    {
+        free(_cachedData);
+    }
+    void UpdateChange::commit() {}
+    void UpdateChange::rollback() {
+        persistent_ptr<InitData> obj;
+        uint64_t id = 0;
+        _mapper = pool<root>(_pop).get_root()->kvmap_root_ptr;
+        try {
+            transaction::exec_tx(_pop, [&] {
+                obj = pmemobj_tx_alloc(sizeof(InitData::size) + _cachedData->size, 1);
+                obj->size = _cachedData->size;
+                memcpy(obj->data, _cachedData->data, _cachedData->size);
+            });
+        } catch (std::exception &e) {
+            log() << e.what();
+        }
+        id = _mapper->updateKV(_key, obj);
+    }
 
 }

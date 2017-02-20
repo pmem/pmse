@@ -166,10 +166,13 @@ bool PmseListIntPtr::getPair(uint64_t key, persistent_ptr<KVPair> &item_ptr) {
 }
 
 void PmseListIntPtr::update(uint64_t key,
-                            const persistent_ptr<InitData> &value) {
+                            const persistent_ptr<InitData> &value, OperationContext* txn) {
     for (auto rec = head; rec != nullptr; rec = rec->next) {
         if (rec->idValue == key) {
             if (rec->ptr != nullptr) {
+                if (txn) {
+                    txn->recoveryUnit()->registerChange(new UpdateChange(pop, key, (rec->ptr).get()));
+                }
                 try {
                     transaction::exec_tx(pop, [&rec] {
                         delete_persistent<InitData>(rec->ptr);

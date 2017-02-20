@@ -111,10 +111,10 @@ public:
         return true; //correctly added
     }
 
-    bool updateKV(uint64_t id, persistent_ptr<T> value) {
+    bool updateKV(uint64_t id, persistent_ptr<T> value, OperationContext* txn = nullptr) {
         persistent_ptr<T> temp;
         if (find(id, temp)) {
-            _list[id % _size]->update(id, value);
+            _list[id % _size]->update(id, value, txn);
             _dataSize += pmemobj_alloc_usable_size(value.raw()) - pmemobj_alloc_usable_size(temp.raw());
         } else {
             return false;

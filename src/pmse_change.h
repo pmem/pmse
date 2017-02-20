@@ -69,5 +69,20 @@ private:
 
 };
 
+class UpdateChange : public RecoveryUnit::Change
+{
+public:
+    UpdateChange(pool_base pop, uint64_t key, InitData* data);
+    ~UpdateChange();
+    virtual void rollback();
+    virtual void commit();
+private:
+    pool_base _pop;
+    uint64_t _key;
+    InitData *_cachedData;
+    persistent_ptr<PmseMap<InitData>> _mapper;
+
+};
+
 }
 #endif /* SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_CHANGE_H_ */
