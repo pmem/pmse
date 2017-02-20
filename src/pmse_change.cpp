@@ -88,8 +88,8 @@ namespace mongo {
     void UpdateChange::rollback() {
         persistent_ptr<InitData> obj;
         uint64_t id = 0;
-        _mapper = pool<root>(_pop).get_root()->kvmap_root_ptr;
         try {
+            _mapper = pool<root>(_pop).get_root()->kvmap_root_ptr;
             transaction::exec_tx(_pop, [&] {
                 obj = pmemobj_tx_alloc(sizeof(InitData::size) + _cachedData->size, 1);
                 obj->size = _cachedData->size;
@@ -138,23 +138,23 @@ namespace mongo {
         persistent_ptr<char> obj;
         Status status = Status::OK();
         BSONObj_PM bsonPM;
-        _tree = pool<PmseTree>(_pop).get_root();
 
         try {
+            _tree = pool<PmseTree>(_pop).get_root();
             transaction::exec_tx(_pop,
-                [&] {
-                obj = pmemobj_tx_alloc(_key.objsize(), 1);
-                memcpy( (void*)obj.get(), _key.objdata(), _key.objsize());
-                bsonPM.data = obj;
-                status = _tree->insert(_pop, bsonPM, _loc, _ordering, _dupsAllowed);
-                if(status == Status::OK())
-                {
-                    ++_tree->_records;
-                }
-            });
+                            [&] {
+                                obj = pmemobj_tx_alloc(_key.objsize(), 1);
+                                memcpy( (void*)obj.get(), _key.objdata(), _key.objsize());
+                                bsonPM.data = obj;
+                                status = _tree->insert(_pop, bsonPM, _loc, _ordering, _dupsAllowed);
+                                if(status == Status::OK())
+                                {
+                                    ++_tree->_records;
+                                }
+                            });
         } catch (std::exception &e) {
-                log() << e.what();
-            }
+            log() << e.what();
+        }
     }
 
 }
