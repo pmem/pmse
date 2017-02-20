@@ -95,12 +95,11 @@ namespace mongo {
                 obj->size = _cachedData->size;
                 memcpy(obj->data, _cachedData->data, _cachedData->size);
             });
+            id = _mapper->updateKV(_key, obj);
         } catch (std::exception &e) {
             log() << e.what();
         }
-        id = _mapper->updateKV(_key, obj);
     }
-
     InsertIndexChange::InsertIndexChange(persistent_ptr<PmseTree> tree,
                                          pool_base pop, BSONObj key,
                                          RecordId loc, bool dupsAllowed,
@@ -116,12 +115,10 @@ namespace mongo {
     }
     void InsertIndexChange::rollback() {
         try {
-            transaction::exec_tx(_pop,
-
-                            [&] {
-                                _tree->remove(_pop, _key, _loc, _dupsAllowed, _desc->keyPattern(), nullptr);
-                                --(_tree->_records);
-                            });
+            transaction::exec_tx(_pop,[&] {
+                _tree->remove(_pop, _key, _loc, _dupsAllowed, _desc->keyPattern(), nullptr);
+                --(_tree->_records);
+            });
         } catch (std::exception &e) {
             log() << e.what();
         }
@@ -141,17 +138,16 @@ namespace mongo {
 
         try {
             _tree = pool<PmseTree>(_pop).get_root();
-            transaction::exec_tx(_pop,
-                            [&] {
-                                obj = pmemobj_tx_alloc(_key.objsize(), 1);
-                                memcpy( (void*)obj.get(), _key.objdata(), _key.objsize());
-                                bsonPM.data = obj;
-                                status = _tree->insert(_pop, bsonPM, _loc, _ordering, _dupsAllowed);
-                                if(status == Status::OK())
-                                {
-                                    ++_tree->_records;
-                                }
-                            });
+            transaction::exec_tx(_pop,[&] {
+                obj = pmemobj_tx_alloc(_key.objsize(), 1);
+                memcpy( (void*)obj.get(), _key.objdata(), _key.objsize());
+                bsonPM.data = obj;
+                status = _tree->insert(_pop, bsonPM, _loc, _ordering, _dupsAllowed);
+                if(status == Status::OK())
+                {
+                    ++_tree->_records;
+                }
+            });
         } catch (std::exception &e) {
             log() << e.what();
         }
