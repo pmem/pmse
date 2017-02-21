@@ -92,7 +92,7 @@ std::unique_ptr<RecordStore> PmseEngine::getRecordStore(OperationContext* opCtx,
                                                         StringData ns,
                                                         StringData ident,
                                                         const CollectionOptions& options) {
-    //TODO: Update ns in identList when collection change its ns
+    identList->update(ident.toString().c_str(), ns.toString().c_str());
     return stdx::make_unique<PmseRecordStore>(ns, ident, options, _DBPATH, _pool_handler);
 }
 

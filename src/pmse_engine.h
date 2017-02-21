@@ -98,8 +98,7 @@ public:
         return true;
     }
 
-    virtual Status beginBackup(OperationContext* txn)
-    {
+    virtual Status beginBackup(OperationContext* txn) {
         return Status::OK();
     }
 
