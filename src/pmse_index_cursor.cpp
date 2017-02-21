@@ -374,6 +374,10 @@ bool PmseCursor::correctType(BSONObj record) {
     bool result = false;
 
     BSONType typeRecord = record.firstElementType();
+
+    if(cursorType == EOO)
+        return true;
+
     if (cursorType == typeRecord)
         return true;
 
@@ -386,9 +390,10 @@ bool PmseCursor::correctType(BSONObj record) {
     case NumberInt:
     case NumberLong:
     case NumberDecimal:
+    case Array:
         if ((typeRecord == NumberDouble) || (typeRecord == NumberInt)
                         || (typeRecord == NumberLong)
-                        || (typeRecord == NumberDecimal))
+                        || (typeRecord == NumberDecimal) || (typeRecord == Array))
             result = true;
         break;
     case Object:
