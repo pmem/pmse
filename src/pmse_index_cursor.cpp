@@ -375,14 +375,11 @@ bool PmseCursor::correctType(BSONObj record) {
 
     BSONType typeRecord = record.firstElementType();
 
-    if(cursorType == EOO)
-        return true;
-
     if (cursorType == typeRecord)
         return true;
 
-    if (cursorType == MinKey || cursorType == MaxKey
-                    || cursorType == Undefined) {
+    if (cursorType == MinKey || cursorType == MaxKey || cursorType == Undefined
+                    || cursorType == EOO || cursorType == jstNULL) {
         return true;
     }
     switch (cursorType) {
