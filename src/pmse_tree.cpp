@@ -94,7 +94,7 @@ Status PmseTree::dupKeyCheck(pool_base pop,BSONObj& key, const RecordId& loc)
 }
 
 
-void PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
+bool PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
                       bool dupsAllowed, const BSONObj& ordering, OperationContext* txn = nullptr) {
 
     persistent_ptr<PmseTreeNode> node;
@@ -125,7 +125,7 @@ void PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
                                 node = node->previous;
                                 i = node->num_keys - 1;
                             } else {
-                                return;
+                                return false;
                             }
                         }
                     }
@@ -141,6 +141,7 @@ void PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
     //didn't find value in node - it must be in previous one - only for non-unique values
     if(i==(node->num_keys))
     {
+
         if (dupsAllowed) {
             if(node->previous)
             {
@@ -161,10 +162,14 @@ void PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
                         }
                         else
                         {
-                            return;
+                            return false;
                         }
                     }
                 }
+            }
+            else
+            {
+                return false;
             }
         }
     }
@@ -176,6 +181,7 @@ void PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
         txn->recoveryUnit()->registerChange(new RemoveIndexChange(pop, key, loc, dupsAllowed, ordering));
 
     root = deleteEntry(pop, key, node, i);
+    return true;
 }
 
 persistent_ptr<PmseTreeNode> PmseTree::deleteEntry(
