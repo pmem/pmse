@@ -535,9 +535,17 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(
                 return boost::none;
             }
         }
-        return IndexKeyEntry(
+        if (_endPosition
+                        && SimpleBSONObjComparator::kInstance.evaluate(
+                                        _cursor.node->keys[_cursor.index].getBSON()
+                                                        == _endPosition->getBSON())) {
+            return boost::none;
+        }
+        else{
+            return IndexKeyEntry(
                         _cursor.node->keys[_cursor.index].getBSON(),
                         _cursor.node->values_array[_cursor.index]);
+        }
     }
 
     /*
