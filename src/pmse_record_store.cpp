@@ -135,6 +135,8 @@ StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
         return StatusWith<RecordId>(ErrorCodes::InternalError,
                                     "Not allocated memory!");
     id = _mapper->insert(obj);
+    RecordData rd = RecordData(obj->data, obj->size);
+    _mapper->changeSize(rd.size());
     if(!id)
         return StatusWith<RecordId>(ErrorCodes::OperationFailed,
                                     "Null record Id!");
@@ -155,7 +157,11 @@ Status PmseRecordStore::updateRecord(OperationContext* txn, const RecordId& oldL
             obj = pmemobj_tx_alloc(sizeof(InitData::size) + len, 1);
             obj->size = len;
             memcpy(obj->data, data, len);
+            auto rd = RecordData(obj->data, obj->size);
+            RecordData old_rd;
+            findRecord(txn, oldLocation, &old_rd);
             _mapper->updateKV(oldLocation.repr(), obj, txn);
+            _mapper->changeSize(rd.size()-old_rd.size());
             deleteCappedAsNeeded(txn);
         });
     } catch (std::exception &e) {
@@ -170,7 +176,10 @@ Status PmseRecordStore::updateRecord(OperationContext* txn, const RecordId& oldL
 
 void PmseRecordStore::deleteRecord(OperationContext* txn,
                                       const RecordId& dl) {
+    RecordData rd;
+    findRecord(txn, dl, &rd);
     _mapper->remove((uint64_t) dl.repr(), txn);
+    _mapper->changeSize(-rd.size());
 }
 
 void PmseRecordStore::setCappedCallback(CappedCallback* cb) {
