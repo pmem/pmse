@@ -318,13 +318,15 @@ boost::optional<IndexKeyEntry> PmseCursor::next(
         _eofRestore= false;
         return boost::none;
     }
-    if (correctType(_cursor.node->keys[_cursor.index].getBSON())) {
 
-        if(!_wasMoved)
-        {
-            moveToNext();
-        }
-        _wasMoved = false;
+    if(!_wasMoved)
+    {
+        moveToNext();
+    }
+    _wasMoved = false;
+
+
+    do{
         if(_cursor.node)
         {
             if (_endPosition && (SimpleBSONObjComparator::kInstance.evaluate(
@@ -332,16 +334,20 @@ boost::optional<IndexKeyEntry> PmseCursor::next(
                                                             == _endPosition->getBSON()))) {
                 return boost::none;
             }
-
-            return IndexKeyEntry(
-                        _cursor.node->keys[_cursor.index].getBSON(),
-                        _cursor.node->values_array[_cursor.index]);
+            if (correctType(_cursor.node->keys[_cursor.index].getBSON())){
+                return IndexKeyEntry(
+                            _cursor.node->keys[_cursor.index].getBSON(),
+                            _cursor.node->values_array[_cursor.index]);
+            }
+            moveToNext();
         }
         else
         {
             return boost::none;
         }
     }
+    while(true);
+
     return boost::none;
 }
 
