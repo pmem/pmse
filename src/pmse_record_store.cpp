@@ -221,6 +221,7 @@ void PmseRecordStore::deleteCappedAsNeeded(OperationContext* txn) {
         RecordData data;
         findRecord(txn, id, &data);
         _mapper->remove(idToDelete);
+        _mapper->changeSize(-data.size());
         uassertStatusOK(_cappedCallback->aboutToDeleteCapped(txn, id, data));
     }
 }
