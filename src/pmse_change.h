@@ -49,31 +49,33 @@ namespace mongo {
 class InsertChange : public RecoveryUnit::Change
 {
 public:
-    InsertChange(persistent_ptr<PmseMap<InitData>> mapper, RecordId loc);
+    InsertChange(persistent_ptr<PmseMap<InitData>> mapper, RecordId loc, uint64_t dataSize);
     virtual void rollback();
     virtual void commit();
 private:
     persistent_ptr<PmseMap<InitData>> _mapper;
     const RecordId _loc;
+    uint64_t _dataSize;
 };
 
 class RemoveChange : public RecoveryUnit::Change
 {
 public:
-    RemoveChange(pool_base pop, InitData* data);
+    RemoveChange(pool_base pop, InitData* data, uint64_t dataSize);
     ~RemoveChange();
     virtual void rollback();
     virtual void commit();
 private:
     pool_base _pop;
     InitData *_cachedData;
+    uint64_t _dataSize;
     persistent_ptr<PmseMap<InitData>> _mapper;
 };
 
 class UpdateChange : public RecoveryUnit::Change
 {
 public:
-    UpdateChange(pool_base pop, uint64_t key, InitData* data);
+    UpdateChange(pool_base pop, uint64_t key, InitData* data, uint64_t dataSize);
     ~UpdateChange();
     virtual void rollback();
     virtual void commit();
@@ -81,6 +83,7 @@ private:
     pool_base _pop;
     uint64_t _key;
     InitData *_cachedData;
+    uint64_t _dataSize;
     persistent_ptr<PmseMap<InitData>> _mapper;
 };
 

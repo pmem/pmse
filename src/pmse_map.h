@@ -190,7 +190,7 @@ public:
         return _dataSize;
     }
 
-    void changeSize(int64_t size) {
+    void changeSize(uint64_t size) {
         _dataSize += size;
     }
 
@@ -209,7 +209,7 @@ private:
     const int _size;
     const bool _isCapped;
     pool_base pop;
-    p<int64_t> _dataSize = 0;
+    p<uint64_t> _dataSize = 0;
     p<uint64_t> _counter = 0;
     p<uint64_t> _hashmapSize = 0;
     p<uint64_t> _maxDocuments;
