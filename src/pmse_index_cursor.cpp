@@ -307,12 +307,14 @@ boost::optional<IndexKeyEntry> PmseCursor::next(
      * Advance cursor in leaves
      */
 
-    if (!_tree->root) {
+    if (!_tree->root)
+    {
         return boost::none;
     }
     if (_cursor.node == nullptr)
+    {
         return boost::none;
-
+    }
     if (_eofRestore)
     {
         _eofRestore= false;
@@ -331,7 +333,8 @@ boost::optional<IndexKeyEntry> PmseCursor::next(
         {
             if (_endPosition && (SimpleBSONObjComparator::kInstance.evaluate(
                                             _cursor.node->keys[_cursor.index].getBSON()
-                                                            == _endPosition->getBSON()))) {
+                                                            == _endPosition->getBSON())))
+            {
                 return boost::none;
             }
             if (correctType(_cursor.node->keys[_cursor.index].getBSON())){
