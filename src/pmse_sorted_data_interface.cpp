@@ -82,8 +82,7 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
     persistent_ptr<char> obj;
 
     try {
-        transaction::exec_tx(pm_pool,
-                             [&] {
+        transaction::exec_tx(pm_pool, [&] {
             obj = pmemobj_tx_alloc(owned.objsize(), 1);
             memcpy( (void*)obj.get(), owned.objdata(), owned.objsize());
         });
@@ -108,9 +107,8 @@ void PmseSortedDataInterface::unindex(OperationContext* txn, const BSONObj& key,
                                       const RecordId& loc, bool dupsAllowed) {
     BSONObj owned = key.getOwned();
     try {
-        transaction::exec_tx(pm_pool,
-        [&] {
-            if(tree->remove(pm_pool, owned, loc, dupsAllowed, _desc->keyPattern(), txn))
+        transaction::exec_tx(pm_pool, [&] {
+            if (tree->remove(pm_pool, owned, loc, dupsAllowed, _desc->keyPattern(), txn))
                 --tree->_records;
         });
 

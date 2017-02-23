@@ -313,7 +313,7 @@ void PmseRecordCursor::save() {
 }
 
 bool PmseRecordCursor::restore() {
-    if(_mapper->isCapped()) {
+    if(_mapper->isCapped() && _restorePoint == nullptr) {
         _eof = true;
         return false;
     }
@@ -329,6 +329,7 @@ bool PmseRecordCursor::restore() {
     }
     if(!_mapper->hasId(_cur->idValue)) {
         _cur = _restorePoint;
+        _restorePoint = nullptr;
         _lastMoveWasRestore = true;
         actual = _actualAfterRestore;
     }
