@@ -38,7 +38,11 @@
 
 #include "mongo/util/log.h"
 
+using std::string;
+
 namespace mongo {
+
+const int TempKeyMaxSize = 1024;
 
 PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
                                                  const IndexDescriptor* desc,
@@ -80,6 +84,12 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
     Status status = Status::OK();
 
     persistent_ptr<char> obj;
+    if (key.objsize() >= TempKeyMaxSize) {
+                string msg = mongoutils::str::stream()
+                    << "PMSE::insert: key too large to index, failing " << ' '
+                    << key.objsize() << ' ' << key;
+                return Status(ErrorCodes::KeyTooLong, msg);
+            }
 
     try {
         transaction::exec_tx(pm_pool, [&] {
