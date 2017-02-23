@@ -85,11 +85,11 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
 
     persistent_ptr<char> obj;
     if (key.objsize() >= TempKeyMaxSize) {
-                string msg = mongoutils::str::stream()
-                    << "PMSE::insert: key too large to index, failing " << ' '
-                    << key.objsize() << ' ' << key;
-                return Status(ErrorCodes::KeyTooLong, msg);
-            }
+        string msg = mongoutils::str::stream()
+            << "PMSE::insert: key too large to index, failing " << ' '
+            << key.objsize() << ' ' << key;
+        return Status(ErrorCodes::KeyTooLong, msg);
+    }
 
     try {
         transaction::exec_tx(pm_pool, [&] {
