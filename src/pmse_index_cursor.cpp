@@ -703,7 +703,6 @@ boost::optional<IndexKeyEntry> PmseCursor::seekExact(
 }
 
 void PmseCursor::save() {
-
     if(!_wasMoved)
         moveToNext();
     _wasMoved = true;
