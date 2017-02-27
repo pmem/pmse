@@ -30,6 +30,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include "mongo/db/storage/sorted_data_interface.h"
+#include "mongo/db/storage/key_string.h"
+
 #include "pmse_tree.h"
 
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
@@ -61,6 +63,8 @@ public:
     void reattachToOperationContext(OperationContext* opCtx);
 
 private:
+    boost::optional<IndexKeyEntry> seekInTree(const BSONObj& key, KeyString::Discriminator discriminator,
+                                        RequestedInfo parts);
     persistent_ptr<PmseTreeNode> find_leaf(persistent_ptr<PmseTreeNode> node,
                                            const BSONObj& key,
                                            const BSONObj& _ordering);
