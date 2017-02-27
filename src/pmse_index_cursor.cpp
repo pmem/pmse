@@ -38,6 +38,12 @@
 
 namespace mongo {
 
+enum BehaviorIfFieldIsEqual {
+    normal = '\0',
+    less = 'l',
+    greater = 'g',
+};
+
 PmseCursor::PmseCursor(OperationContext* txn, bool isForward,
                        persistent_ptr<PmseTree> tree, const BSONObj& ordering,
                        const bool unique) :
@@ -306,7 +312,6 @@ boost::optional<IndexKeyEntry> PmseCursor::next(
     /*
      * Advance cursor in leaves
      */
-
     if (!_tree->root)
     {
         return boost::none;
@@ -471,6 +476,14 @@ void PmseCursor::moveToNext() {
 boost::optional<IndexKeyEntry> PmseCursor::seek(
                 const BSONObj& key, bool inclusive, RequestedInfo parts =
                                 kKeyAndLoc) {
+    const auto discriminator = inclusive ? KeyString::kInclusive : KeyString::kExclusiveBefore;
+    return seekInTree(key, discriminator, parts);
+}
+
+
+boost::optional<IndexKeyEntry> PmseCursor::seekInTree(
+                const BSONObj& key, KeyString::Discriminator discriminator, RequestedInfo parts =
+                                kKeyAndLoc) {
     CursorObject _previousCursor;
     uint64_t i = 0;
     int cmp;
@@ -502,7 +515,7 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(
     }
     //only in backward
     if (SimpleBSONObjComparator::kInstance.evaluate(key == max)) {
-        if (_endPosition && _inf == MAX_END && !inclusive)
+        if (_endPosition && _inf == MAX_END && (discriminator!=KeyString::kInclusive))
             return boost::none;
 
         _cursor.node = _last;
@@ -595,9 +608,9 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(
      * So it is equal element
      */
     /*
-     * If inclusive - return next not-equal element (while)
+     * If not inclusive - return next not-equal element (while)
      */
-    if (!inclusive) {
+    if (discriminator!=KeyString::kInclusive) {
         _cursor.node = node;
         _cursor.index = i;
         while (key.woCompare(
@@ -614,7 +627,7 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(
     }
 
     /*
-     * It is not inclusive.
+     * It is inclusive.
      * Check if is first element in this node
      */
     if (_forward) {
@@ -689,9 +702,24 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(
 boost::optional<IndexKeyEntry> PmseCursor::seek(
                 const IndexSeekPoint& seekPoint,
                 RequestedInfo parts = kKeyAndLoc) {
+
     BSONObj key = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
-    const auto discriminator = _forward ? true : false;
-    return seek(key, discriminator, parts);
+    auto discriminator = KeyString::kInclusive;
+
+    BSONObjIterator lhsIt(key);
+    for (; lhsIt.more();)
+    {
+        const BSONElement l = lhsIt.next();
+        BehaviorIfFieldIsEqual lEqBehavior = BehaviorIfFieldIsEqual(l.fieldName()[0]);
+        if (lEqBehavior)
+        {
+            if(lEqBehavior == greater)
+            {
+                discriminator = KeyString::kExclusiveBefore;
+            }
+        }
+    }
+    return seekInTree(key, discriminator, parts);
 }
 
 boost::optional<IndexKeyEntry> PmseCursor::seekExact(
