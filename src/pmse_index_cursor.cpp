@@ -515,7 +515,7 @@ boost::optional<IndexKeyEntry> PmseCursor::seekInTree(
     }
     //only in backward
     if (SimpleBSONObjComparator::kInstance.evaluate(key == max)) {
-        if (_endPosition && _inf == MAX_END && (discriminator!=KeyString::kInclusive))
+        if (_endPosition && _inf == MAX_END && (discriminator != KeyString::kInclusive))
             return boost::none;
 
         _cursor.node = _last;
@@ -610,7 +610,7 @@ boost::optional<IndexKeyEntry> PmseCursor::seekInTree(
     /*
      * If not inclusive - return next not-equal element (while)
      */
-    if (discriminator!=KeyString::kInclusive) {
+    if (discriminator != KeyString::kInclusive) {
         _cursor.node = node;
         _cursor.index = i;
         while (key.woCompare(
@@ -707,7 +707,7 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(
     auto discriminator = KeyString::kInclusive;
 
     BSONObjIterator lhsIt(key);
-    for (; lhsIt.more();)
+    while (lhsIt.more())
     {
         const BSONElement l = lhsIt.next();
         BehaviorIfFieldIsEqual lEqBehavior = BehaviorIfFieldIsEqual(l.fieldName()[0]);
