@@ -173,8 +173,7 @@ void PmseListIntPtr::update(uint64_t key,
         if (rec->idValue == key) {
             if (rec->ptr != nullptr) {
                 if (txn) {
-                    auto rd = RecordData(rec->ptr->data, rec->ptr->size);
-                    txn->recoveryUnit()->registerChange(new UpdateChange(pop, key, (rec->ptr).get(), rd.size()));
+                    txn->recoveryUnit()->registerChange(new UpdateChange(pop, key, (rec->ptr).get(), rec->ptr->size));
                 }
                 try {
                     transaction::exec_tx(pop, [&rec] {
