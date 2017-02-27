@@ -210,11 +210,7 @@ class PmseRecordStore : public RecordStore {
                             ValidateCmdLevel level,
                             ValidateAdaptor* adaptor,
                             ValidateResults* results,
-                            BSONObjBuilder* output) {
-        // TODO(kfilipek): Implement validate
-        output->appendNumber("nrecords", _mapper->fillment());
-        return Status::OK();
-    }
+                            BSONObjBuilder* output);
 
  private:
     void deleteCappedAsNeeded(OperationContext* txn);

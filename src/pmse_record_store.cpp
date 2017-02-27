@@ -279,6 +279,43 @@ void PmseRecordCursor::moveToNext(bool inNext) {
     }
 }
 
+Status PmseRecordStore::validate(OperationContext* txn,
+                                 ValidateCmdLevel level,
+                                 ValidateAdaptor* adaptor,
+                                 ValidateResults* results,
+                                 BSONObjBuilder* output) {
+    int64_t nInvalid = 0;
+    int64_t nRecords = 0;
+    uint64_t totalDataSize = 0;
+
+    auto cursor = getCursor(txn, true);
+    boost::optional<Record> record;
+    Status status = Status::OK();
+    while(record = cursor->next()) {
+        auto dataSize = record->data.size();
+        totalDataSize += dataSize;
+        ++nRecords;
+        if (level == kValidateFull) {
+            size_t validatedSize;
+            status = adaptor->validate(record->id, record->data, &validatedSize);
+            if (!status.isOK() || static_cast<size_t>(dataSize) != validatedSize) {
+                if (results->valid) {
+                    results->errors.push_back("detected one or more invalid documents (see logs)");
+                    results->valid = false;
+                }
+                ++nInvalid;
+                log() << "document: RecordId(" << record->id << ") is corruped";
+            }
+        }
+    }
+
+    if (level == kValidateFull)
+        output->append("nInvalidDocuments", nInvalid);
+
+    output->appendNumber("nrecords", _mapper->fillment());
+    return Status::OK();
+}
+
 boost::optional<Record> PmseRecordCursor::next() {
     if(_eof)
         return boost::none;
