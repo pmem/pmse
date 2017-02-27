@@ -107,7 +107,6 @@ public:
         } else {
             return false;
         }
-        _dataSize += pmemobj_alloc_usable_size(value.raw());
         return true; //correctly added
     }
 
@@ -115,7 +114,6 @@ public:
         persistent_ptr<T> temp;
         if (find(id, temp)) {
             _list[id % _size]->update(id, value, txn);
-            _dataSize += pmemobj_alloc_usable_size(value.raw()) - pmemobj_alloc_usable_size(temp.raw());
         } else {
             return false;
         }
@@ -135,9 +133,6 @@ public:
     }
 
     bool remove(uint64_t id, OperationContext* txn = nullptr) {
-        persistent_ptr<T> temp;
-        if(find(id, temp))
-            _dataSize -= pmemobj_alloc_usable_size(temp.raw());
         _list[id % _size]->deleteKV(id, _deleted, txn);
         _hashmapSize--;
         return true;
@@ -195,6 +190,10 @@ public:
         return _dataSize;
     }
 
+    void changeSize(uint64_t size) {
+        _dataSize += size;
+    }
+
     bool isCapped() const {
         return _isCapped;
     }
@@ -210,7 +209,7 @@ private:
     const int _size;
     const bool _isCapped;
     pool_base pop;
-    p<int64_t> _dataSize = 0;
+    p<uint64_t> _dataSize = 0;
     p<uint64_t> _counter = 0;
     p<uint64_t> _hashmapSize = 0;
     p<uint64_t> _maxDocuments;

@@ -85,7 +85,8 @@ void PmseListIntPtr::insertKV(const persistent_ptr<KVPair> &key,
 }
 
 int64_t PmseListIntPtr::deleteKV(uint64_t key,
-                                 persistent_ptr<KVPair> &deleted, OperationContext* txn) {
+                                 persistent_ptr<KVPair> &deleted,
+                                 OperationContext* txn) {
     auto before = head;
     int64_t sizeFreed = 0;
     for (auto rec = head; rec != nullptr; rec = rec->next) {
@@ -121,7 +122,8 @@ int64_t PmseListIntPtr::deleteKV(uint64_t key,
                     deleted = rec;
                 }
                 if (txn) {
-                    txn->recoveryUnit()->registerChange(new RemoveChange(pop, (deleted->ptr).get()));
+                    auto rd = RecordData(deleted->ptr->data, deleted->ptr->size);
+                    txn->recoveryUnit()->registerChange(new RemoveChange(pop, (deleted->ptr).get(), rd.size()));
                 }
                 sizeFreed = pmemobj_alloc_usable_size(deleted->ptr.raw());
                 delete_persistent<InitData>(deleted->ptr);
@@ -171,7 +173,7 @@ void PmseListIntPtr::update(uint64_t key,
         if (rec->idValue == key) {
             if (rec->ptr != nullptr) {
                 if (txn) {
-                    txn->recoveryUnit()->registerChange(new UpdateChange(pop, key, (rec->ptr).get()));
+                    txn->recoveryUnit()->registerChange(new UpdateChange(pop, key, (rec->ptr).get(), rec->ptr->size));
                 }
                 try {
                     transaction::exec_tx(pop, [&rec] {
