@@ -102,6 +102,10 @@ public:
         return Status::OK();
     }
 
+    virtual void endBackup(OperationContext* txn) {
+        return;
+    }
+
     virtual bool supportsDirectoryPerDB() const {
         return false;
     }
