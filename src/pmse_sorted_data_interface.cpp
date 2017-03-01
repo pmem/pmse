@@ -102,7 +102,7 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
         if(status == Status::OK())
         {
             ++tree->_records;
-            txn->recoveryUnit()->registerChange(new InsertIndexChange(tree, pm_pool, key, loc, dupsAllowed,_desc));
+            txn->recoveryUnit()->registerChange(new InsertIndexChange(tree, pm_pool, key, loc, dupsAllowed, _desc));
         }
     } catch (std::exception &e) {
         log() << e.what();
@@ -128,30 +128,30 @@ void PmseSortedDataInterface::unindex(OperationContext* txn, const BSONObj& key,
 
 }
 
-Status PmseSortedDataInterface::dupKeyCheck(OperationContext* txn, const BSONObj& key,
+Status PmseSortedDataInterface::dupKeyCheck(OperationContext* txn,
+                                            const BSONObj& key,
                                             const RecordId& loc) {
     BSONObj owned = key.getOwned();
-    return tree->dupKeyCheck(pm_pool,owned,loc);
+    return tree->dupKeyCheck(pm_pool, owned, loc);
 }
 
 std::unique_ptr<SortedDataInterface::Cursor> PmseSortedDataInterface::newCursor(
                 OperationContext* txn, bool isForward) const {
-    return stdx::make_unique <PmseCursor> (txn, isForward, tree, _desc->keyPattern(), _desc->unique());
+    return stdx::make_unique <PmseCursor> (txn, isForward, tree,
+                                           _desc->keyPattern(), _desc->unique());
 }
 
-class PMStoreSortedDataBuilderInterface : public SortedDataBuilderInterface {
-    MONGO_DISALLOW_COPYING(PMStoreSortedDataBuilderInterface)
-    ;
-
+class PmseSortedDataBuilderInterface : public SortedDataBuilderInterface {
+    MONGO_DISALLOW_COPYING(PmseSortedDataBuilderInterface);
 public:
-
-    PMStoreSortedDataBuilderInterface(PmseSortedDataInterface* index,
-                                      OperationContext* txn) :
-                    _index(index), _txn(txn) {
+    PmseSortedDataBuilderInterface(OperationContext* txn,
+                                   PmseSortedDataInterface* index,
+                                   bool dupsAllowed)
+            : _index(index), _txn(txn), _dupsAllowed(dupsAllowed) {
     }
 
     virtual Status addKey(const BSONObj& key, const RecordId& loc) {
-        return _index->insert(_txn, key, loc, true);
+        return _index->insert(_txn, key, loc, _dupsAllowed);
     }
 
     void commit(bool mayInterrupt) {
@@ -159,12 +159,13 @@ public:
 private:
     PmseSortedDataInterface* _index;
     OperationContext* _txn;
+    bool _dupsAllowed;
 
 };
 
 SortedDataBuilderInterface* PmseSortedDataInterface::getBulkBuilder(
                 OperationContext* txn, bool dupsAllowed) {
-    return new PMStoreSortedDataBuilderInterface(this, txn);
+    return new PmseSortedDataBuilderInterface(txn, this, dupsAllowed);
 }
 
 }
