@@ -88,7 +88,6 @@ public:
     }
 
     virtual Status initAsEmpty(OperationContext* txn) {
-        // TODO: Implement initAsEmpty
         return Status::OK();
     }
 
