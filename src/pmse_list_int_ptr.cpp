@@ -65,20 +65,34 @@ uint64_t PmseListIntPtr::size() {
 }
 
 void PmseListIntPtr::insertKV(const persistent_ptr<KVPair> &key,
-                              const persistent_ptr<InitData> &value) {
+                              const persistent_ptr<InitData> &value, bool insertToFront) {
     try {
-        transaction::exec_tx(pop, [this, &key, &value] {
-            key->ptr = value;
-            key->next = nullptr;
-            key->position = counter++;
-            if (head != nullptr) {
-                tail->next = key;
-                tail = key;
-            } else {
-                head = key;
-                tail = head;
+        transaction::exec_tx(pop, [this, &key, &value, insertToFront] {
+            if(insertToFront){
+                key->ptr = value;
+                key->next = nullptr;
+                if(head != nullptr){
+                    key->next = head;
+                    head = key;
+                }
+                else{
+                    head = key;
+                    tail = head;
+                }
+                _size++;
             }
-            _size++;
+            else{
+                key->ptr = value;
+                key->next = nullptr;
+                if (head != nullptr) {
+                    tail->next = key;
+                    tail = key;
+                } else {
+                    head = key;
+                    tail = head;
+                }
+                _size++;
+            }
         });
     } catch (std::exception &e) {
         log() << "KVMapper: " << e.what();
@@ -190,11 +204,14 @@ void PmseListIntPtr::update(uint64_t key,
     }
 }
 
-void PmseListIntPtr::clear() {
+void PmseListIntPtr::clear(OperationContext* txn, PmseMap<InitData> *_mapper) {
     if (!head)
         return;
-    transaction::exec_tx(pop, [this] {
+    transaction::exec_tx(pop, [this, txn, _mapper] {
         for (auto rec = head; rec != nullptr;) {
+            if (txn)
+                txn->recoveryUnit()->registerChange(new TruncateChange(pop, _mapper, RecordId(rec->idValue),
+                                (rec->ptr).get(), rec->ptr->size));
             auto temp = rec->next;
             delete_persistent<KVPair>(rec);
             rec = temp;

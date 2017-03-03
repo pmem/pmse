@@ -38,13 +38,42 @@
 #include <libpmemobj++/p.hpp>
 #include <libpmemobj++/persistent_ptr.hpp>
 
-#include "pmse_map.h"
+//#include "pmse_map.h"
 #include "pmse_tree.h"
-
+#include "pmse_list_int_ptr.h"
 #include "mongo/db/record_id.h"
 #include "mongo/db/index/index_descriptor.h"
 
 namespace mongo {
+template<typename T>
+class PmseMap;
+
+class TruncateChange: public RecoveryUnit::Change
+{
+public:
+    TruncateChange(pool_base pop, PmseMap<InitData> *mapper, RecordId Id, InitData *data, uint64_t dataSize);
+    virtual void rollback();
+    virtual void commit();
+private:
+    PmseMap<InitData> *_mapper;
+    RecordId _Id;
+    InitData *_cachedData;
+    pool_base _pop;
+    persistent_ptr<KVPair> _key;
+    uint64_t _dataSize;
+};
+
+class DropListChange: public RecoveryUnit::Change
+{
+public:
+    DropListChange(pool_base pop, persistent_ptr<persistent_ptr<PmseListIntPtr>[]> list, int ID);
+    virtual void rollback();
+    virtual void commit();
+private:
+    pool_base _pop;
+    persistent_ptr<persistent_ptr<PmseListIntPtr>[]> _list;
+    int _ID;
+};
 
 class InsertChange : public RecoveryUnit::Change
 {
