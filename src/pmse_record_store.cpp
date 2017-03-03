@@ -135,6 +135,11 @@ StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
         return StatusWith<RecordId>(ErrorCodes::InternalError,
                                     "Not allocated memory!");
     id = _mapper->insert(obj);
+
+    //log() << "------------------ID: " << id;
+    //if(id > 200)
+        //txn->recoveryUnit()->abortUnitOfWork();
+
     _mapper->changeSize(len);
     if(!id)
         return StatusWith<RecordId>(ErrorCodes::OperationFailed,

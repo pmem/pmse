@@ -53,7 +53,7 @@ using namespace nvml::obj;
 namespace mongo {
 
 const uint64_t CAPPED_SIZE = 1;
-const uint64_t HASHMAP_SIZE = 1000;
+const uint64_t HASHMAP_SIZE = 100;
 class PmseRecordCursor;
 
 template<typename T>
@@ -83,6 +83,15 @@ public:
         _hashmapSize++;
         return id->idValue;
     }
+
+    uint64_t insertTruncate(persistent_ptr<T> value, uint64_t idTruncate) {
+            auto id = truncateId(idTruncate);
+            if (!insertKV(id, value)) {
+                return -1;
+            }
+            _hashmapSize++;
+            return id->idValue;
+        }
 
     uint64_t getCappedFirstId() {
         if(isCapped())
@@ -162,20 +171,25 @@ public:
         return _hashmapSize;
     }
 
-    bool truncate() {
+    bool truncate(OperationContext* txn) {
         bool status = true;
         try {
             transaction::exec_tx(pop, [&] {
+                std::cout << "----------------Size: " << _size << std::endl;
                 for(int i = 0; i < _size; i++) {
-                    _list[i]->clear();
+                    std::cout << "Lista nr: " << i << std::endl;
+                    _list[i]->clear(txn, this);
                     delete_persistent<PmseListIntPtr>(_list[i]);
                 }
                 initialize(true);
             });
+
             _counter = 0;
             _hashmapSize = 0;
             _counterCapped = 0;
             _dataSize = 0;
+            txn->recoveryUnit()->abortUnitOfWork();
+            _list[0]->reverseList();
         } catch (nvml::transaction_alloc_error &e) {
             std::cout << e.what() << std::endl;
             status = false;
@@ -183,6 +197,7 @@ public:
             std::cout << e.what() << std::endl;
             status = false;
         }
+        std::cout << "-----------------------------------------------------------------------";
         return status;
     }
 
@@ -224,15 +239,14 @@ private:
         return {};
     }
 
-    persistent_ptr<KVPair> getNextId() {
+    persistent_ptr<KVPair> truncateId(p<uint64_t> id) {
         persistent_ptr<KVPair> temp = nullptr;
         if(_deleted == nullptr) {
-            if(_counter != std::numeric_limits<uint64_t>::max()-1) {
-                this->_counter++;
+            if(id != std::numeric_limits<uint64_t>::max()-1) {
                 try {
                     transaction::exec_tx(pop, [&] {
                         temp = make_persistent<KVPair>();
-                        temp->idValue = _counter;
+                        temp->idValue = id;
                     });
                 } catch (std::exception &e) {
                     std::cout << "Next id generation: " << e.what() << std::endl;
@@ -242,13 +256,39 @@ private:
             }
         } else {
             temp = _deleted;
-            uint64_t id = 0;
-            id = _deleted->idValue;
+            uint64_t id2 = 0;
+            id2 = _deleted->idValue;
             _deleted = _deleted->next;
             return temp;
         }
         return temp;
     }
+
+    persistent_ptr<KVPair> getNextId() {
+            persistent_ptr<KVPair> temp = nullptr;
+            if(_deleted == nullptr) {
+                if(_counter != std::numeric_limits<uint64_t>::max()-1) {
+                    this->_counter++;
+                    try {
+                        transaction::exec_tx(pop, [&] {
+                            temp = make_persistent<KVPair>();
+                            temp->idValue = _counter;
+                        });
+                    } catch (std::exception &e) {
+                        std::cout << "Next id generation: " << e.what() << std::endl;
+                    }
+                } else {
+                    return nullptr;
+                }
+            } else {
+                temp = _deleted;
+                uint64_t id = 0;
+                id = _deleted->idValue;
+                _deleted = _deleted->next;
+                return temp;
+            }
+            return temp;
+        }
 };
 
 struct root {

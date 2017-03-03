@@ -54,7 +54,6 @@
 using namespace nvml::obj;
 
 namespace mongo {
-
 struct InitData {
     uint64_t size;
     char data[];
@@ -65,6 +64,9 @@ struct _pair {
     persistent_ptr<InitData> ptr;
     persistent_ptr<_pair> next;
 };
+
+template<class InitData>
+class PmseMap;
 
 typedef struct _pair KVPair;
 
@@ -81,10 +83,11 @@ class PmseListIntPtr {
     void update(uint64_t key, const persistent_ptr<InitData> &value, OperationContext* txn);
     int64_t deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted, OperationContext* txn);
     bool hasKey(uint64_t key);
-    void clear();
+    void clear(OperationContext* txn, PmseMap<InitData> *_mapper);
     void setPool();
     uint64_t size();
     uint64_t getNextId();
+    void reverseList();
 
  private:
     persistent_ptr<KVPair> getHead() {

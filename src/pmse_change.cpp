@@ -39,8 +39,38 @@
 #include "pmse_change.h"
 
 #include <libpmemobj++/transaction.hpp>
-
+#include <inttypes.h>
 namespace mongo {
+
+TruncateChange::TruncateChange(pool_base pop, PmseMap<InitData> *mapper, RecordId Id, InitData *data)
+        : _mapper(mapper), _Id(Id), _pop(pop) {
+    _cachedData = (InitData*)malloc(sizeof(InitData) + data->size);
+    memcpy(_cachedData->data, data->data, data->size);
+    _cachedData->size = data->size;
+    log() << "--ID--";
+    log() << (uint64_t)Id.repr();
+}
+
+void TruncateChange::commit() {}
+void TruncateChange::rollback()
+{
+    std::cout << "-----Rollback-----" << std::endl;
+    persistent_ptr<InitData> obj;
+   	try {
+       transaction::exec_tx(_pop, [&] {
+           obj = pmemobj_tx_alloc(sizeof(InitData::size) + _cachedData->size, 1);
+           obj->size = _cachedData->size;
+           memcpy(obj->data, _cachedData->data, _cachedData->size);
+           });
+   } catch (std::exception &e) {
+           log() << e.what();
+   }
+
+	uint64_t id = 0;
+	id = _mapper->insertTruncate(obj, (uint64_t) _Id.repr());
+	log() << "\n------------ID numer: ";
+	printf("%" PRIu64 "\n", (uint64_t) _Id.repr());
+}
 
 InsertChange::InsertChange(persistent_ptr<PmseMap<InitData>> mapper,
                            RecordId loc, uint64_t dataSize)

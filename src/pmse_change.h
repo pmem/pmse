@@ -46,6 +46,20 @@
 
 namespace mongo {
 
+class TruncateChange: public RecoveryUnit::Change
+{
+public:
+    TruncateChange(pool_base pop, PmseMap<InitData> *mapper, RecordId Id, InitData *data);
+    virtual void rollback();
+    virtual void commit();
+private:
+    PmseMap<InitData> *_mapper;
+    RecordId _Id;
+    InitData *_cachedData;
+    pool_base _pop;
+    persistent_ptr<KVPair> _key;
+};
+
 class InsertChange : public RecoveryUnit::Change
 {
 public:

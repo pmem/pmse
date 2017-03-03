@@ -165,7 +165,7 @@ class PmseRecordStore : public RecordStore {
     }
 
     virtual Status truncate(OperationContext* txn) {
-        if (!_mapper->truncate()) {
+        if (!_mapper->truncate(txn)) {
             return Status(ErrorCodes::OperationFailed, "Truncate error");
         }
         return Status::OK();
