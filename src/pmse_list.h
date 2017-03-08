@@ -45,11 +45,13 @@
 
 #include <libpmemobj.h>
 #include <libpmemobj++/make_persistent.hpp>
+#include <libpmemobj++/mutex.hpp>
 #include <libpmemobj++/p.hpp>
 #include <libpmemobj++/persistent_ptr.hpp>
 #include <libpmemobj++/pext.hpp>
 #include <libpmemobj++/transaction.hpp>
 
+#include <mutex>
 
 using namespace nvml::obj;
 
@@ -82,6 +84,7 @@ private:
     persistent_ptr<KVPair> tail;
     p<uint64_t> counter;
     pool<PmseList> pool_obj;
+    std::mutex _pmutex;
     PmseList() {}
 };
 

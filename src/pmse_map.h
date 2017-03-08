@@ -46,7 +46,10 @@
 #include <libpmemobj++/pool.hpp>
 #include <libpmemobj++/persistent_ptr.hpp>
 #include <libpmemobj++/make_persistent_array.hpp>
+#include <libpmemobj++/mutex.hpp>
 #include <libpmemobj++/detail/pexceptions.hpp>
+
+#include <mutex>
 
 using namespace nvml::obj;
 
@@ -77,10 +80,12 @@ public:
 
     uint64_t insert(persistent_ptr<T> value) {
         auto id = getNextId();
+        //LOCK_GUARD PER LIST
+        std::lock_guard<nvml::obj::mutex> lock(_listMutex[id->idValue % _size]);
         if (!insertKV(id, value)) {
             return -1;
         }
-        _hashmapSize++;
+        ++_hashmapSize;
         return id->idValue;
     }
 
@@ -112,6 +117,7 @@ public:
 
     bool updateKV(uint64_t id, persistent_ptr<T> value, OperationContext* txn = nullptr) {
         persistent_ptr<T> temp;
+        std::lock_guard<nvml::obj::mutex> lock(_listMutex[id % _size]);
         if (find(id, temp)) {
             _list[id % _size]->update(id, value, txn);
         } else {
@@ -216,6 +222,9 @@ private:
     p<uint64_t> _sizeOfCollection;
     p<uint64_t> _counterCapped = 0;
     persistent_ptr<persistent_ptr<PmseListIntPtr>[]> _list;
+    //Add mutexes
+    nvml::obj::mutex _pmutex;
+    nvml::obj::mutex _listMutex[HASHMAP_SIZE];
     persistent_ptr<KVPair> _deleted;
 
     persistent_ptr<KVPair> getFirstPtr(int listNumber) {
@@ -225,6 +234,8 @@ private:
     }
 
     persistent_ptr<KVPair> getNextId() {
+        //SCOPE LOCK
+        std::lock_guard<nvml::obj::mutex> guard(_pmutex);
         persistent_ptr<KVPair> temp = nullptr;
         if(_deleted == nullptr) {
             if(_counter != std::numeric_limits<uint64_t>::max()-1) {

@@ -37,13 +37,14 @@
 #include "pmse_change.h"
 
 #include "mongo/util/log.h"
-
+#include <libpmemobj++/mutex.hpp>
+#include <mutex>
 using std::string;
 
 namespace mongo {
 
 const int TempKeyMaxSize = 1024;
-
+std::mutex pmutex;
 PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
                                                  const IndexDescriptor* desc,
                                                  StringData dbpath,
@@ -59,7 +60,7 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
 
             if (access(filename.c_str(), F_OK) != 0) {
                 pm_pool = pool<PmseTree>::create(filename.c_str(), "pmse",
-                                                 10 * PMEMOBJ_MIN_POOL, 0666);
+                                                 4 * PMEMOBJ_MIN_POOL, 0666);
             } else {
                 pm_pool = pool<PmseTree>::open(filename.c_str(), "pmse");
             }
@@ -79,6 +80,8 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
 Status PmseSortedDataInterface::insert(OperationContext* txn,
                                        const BSONObj& key, const RecordId& loc,
                                        bool dupsAllowed) {
+    //LOCK_GUARD
+    std::lock_guard<std::mutex> lock(pmutex);
     BSONObj_PM bsonPM;
     BSONObj owned = key.getOwned();
     Status status = Status::OK();
@@ -115,6 +118,7 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
  */
 void PmseSortedDataInterface::unindex(OperationContext* txn, const BSONObj& key,
                                       const RecordId& loc, bool dupsAllowed) {
+    std::lock_guard<std::mutex> lock(pmutex);
     BSONObj owned = key.getOwned();
     try {
         transaction::exec_tx(pm_pool, [&] {
