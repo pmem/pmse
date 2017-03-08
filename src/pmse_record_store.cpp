@@ -79,7 +79,7 @@ PmseRecordStore::PmseRecordStore(StringData ns,
             try {
                 mapPool = pool<root>::create(mapper_filename, "kvmapper",
                                              (ns.toString() == "local.startup_log" ||
-                                                             ns.toString() == "_mdb_catalog" ? 10 : 80)
+                                                             ns.toString() == "_mdb_catalog" ? 3 : 8)
                                                              * PMEMOBJ_MIN_POOL);
             } catch (std::exception &e) {
                 log() << "Error handled: " << e.what();
@@ -136,6 +136,7 @@ StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
     if (obj == nullptr)
         return StatusWith<RecordId>(ErrorCodes::InternalError,
                                     "Not allocated memory!");
+    // TU LOCK_GUARDa na RW / LOCK tylko na liste, ktora bedzie modyfikowana
     id = _mapper->insert(obj);
     _mapper->changeSize(len);
     if (!id)

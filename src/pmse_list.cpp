@@ -44,6 +44,7 @@
 namespace mongo {
 
 void PmseList::insertKV(const char key[], const  char value[]) {
+    std::lock_guard<std::mutex> lock(_pmutex);
     transaction::exec_tx(pool_obj, [&] {
         persistent_ptr<KVPair> pair;
         try {
@@ -67,6 +68,7 @@ void PmseList::insertKV(const char key[], const  char value[]) {
 }
 
 void PmseList::deleteKV(const char key[]) {
+    std::lock_guard<std::mutex> lock(_pmutex);
     auto before = head;
     for(auto rec = head; rec != nullptr; rec = rec->next) {
         if(strcmp(rec->kv.get_ro().id, key) == 0) {
@@ -104,6 +106,7 @@ bool PmseList::hasKey(const char key[]) {
 }
 
 std::vector<std::string> PmseList::getKeys() {
+    std::lock_guard<std::mutex> lock(_pmutex);
     std::vector<std::string> names;
     for(auto rec = head; rec != nullptr; rec = rec->next) {
         names.push_back(rec->kv.get_ro().id);
@@ -113,6 +116,7 @@ std::vector<std::string> PmseList::getKeys() {
 }
 
 const char* PmseList::find(const char key[], bool &status) {
+    std::lock_guard<std::mutex> lock(_pmutex);
     for(auto rec = head; rec != nullptr; rec = rec->next) {
         if(strcmp(rec->kv.get_ro().id, key) == 0) {
             status = true;
@@ -124,6 +128,7 @@ const char* PmseList::find(const char key[], bool &status) {
 }
 
 void PmseList::update(const char key[], const char value[]) {
+    std::lock_guard<std::mutex> lock(_pmutex);
     for(auto rec = head; rec != nullptr; rec = rec->next) {
         if (strcmp(rec->kv.get_ro().id, key) == 0) {
             struct _values temp;
@@ -136,6 +141,7 @@ void PmseList::update(const char key[], const char value[]) {
 }
 
 void PmseList::clear() {
+    std::lock_guard<std::mutex> lock(_pmutex);
     if(!head)
         return;
     transaction::exec_tx(pool_obj, [&] {
