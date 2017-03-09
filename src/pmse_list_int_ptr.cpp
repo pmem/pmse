@@ -65,36 +65,38 @@ uint64_t PmseListIntPtr::size() {
 }
 
 void PmseListIntPtr::insertKV(const persistent_ptr<KVPair> &key,
-                              const persistent_ptr<InitData> &value) {
+                              const persistent_ptr<InitData> &value, bool insertToFront) {
     try {
-        transaction::exec_tx(pop, [this, &key, &value] {
-            key->ptr = value;
-            key->next = nullptr;
-            if (head != nullptr) {
-                tail->next = key;
-                tail = key;
-            } else {
-                head = key;
-                tail = head;
+        transaction::exec_tx(pop, [this, &key, &value, insertToFront] {
+            if(insertToFront){
+                key->ptr = value;
+                key->next = nullptr;
+                if(head != nullptr){
+                    key->next = head;
+                    head = key;
+                }
+                else{
+                    head = key;
+                    tail = head;
+                }
+                _size++;
             }
-            _size++;
+            else{
+                key->ptr = value;
+                key->next = nullptr;
+                if (head != nullptr) {
+                    tail->next = key;
+                    tail = key;
+                } else {
+                    head = key;
+                    tail = head;
+                }
+                _size++;
+            }
         });
     } catch (std::exception &e) {
         log() << "KVMapper: " << e.what();
     }
-}
-
-void PmseListIntPtr::reverseList() {
-    persistent_ptr<KVPair> before = nullptr;
-    persistent_ptr<KVPair> tmp = head; 
-    
-    while(tmp != nullptr){
-    	persistent_ptr<KVPair> next = tmp->next;
-    	tmp->next = before;
-    	before = tmp;
-    	tmp = next;  
-   	}
-    head = before;    
 }
 
 int64_t PmseListIntPtr::deleteKV(uint64_t key,
@@ -211,7 +213,7 @@ void PmseListIntPtr::clear(OperationContext* txn, PmseMap<InitData> *_mapper) {
             std::cout << "------------------Usunieto element o ID: " << rec->idValue << std::endl;
             if (txn)
                 txn->recoveryUnit()->registerChange(new TruncateChange(pop, _mapper, RecordId(rec->idValue),
-                                (rec->ptr).get()));
+                                (rec->ptr).get(), rec->ptr->size));
             auto temp = rec->next;
             delete_persistent<KVPair>(rec);
             rec = temp;

@@ -41,6 +41,7 @@
 #define SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_MAP_H_
 
 #include "pmse_list_int_ptr.h"
+#include "pmse_change.h"
 #include <libpmemobj++/p.hpp>
 #include <libpmemobj++/pext.hpp>
 #include <libpmemobj++/pool.hpp>
@@ -53,7 +54,7 @@ using namespace nvml::obj;
 namespace mongo {
 
 const uint64_t CAPPED_SIZE = 1;
-const uint64_t HASHMAP_SIZE = 100;
+const uint64_t HASHMAP_SIZE = 10;
 class PmseRecordCursor;
 
 template<typename T>
@@ -86,7 +87,7 @@ public:
 
     uint64_t insertTruncate(persistent_ptr<T> value, uint64_t idTruncate) {
             auto id = truncateId(idTruncate);
-            if (!insertKV(id, value)) {
+            if (!insertToFrontKV(id, value)) {
                 return -1;
             }
             _hashmapSize++;
@@ -118,6 +119,22 @@ public:
         }
         return true; //correctly added
     }
+
+    bool insertToFrontKV(persistent_ptr<KVPair> &id, persistent_ptr<T> value) { //internal use
+//        if(_list[id->idValue % _size] == nullptr){
+//            transaction::exec_tx(pop, [&] {
+//                printf("------------------------wchodze");
+//                _list[id->idValue % _size] = make_persistent<PmseListIntPtr>();
+//                _list[id->idValue % _size]->setPool();
+//            });
+//        }
+        if (!hasId(id->idValue)) {
+                _list[id->idValue % _size]->insertKV(id, value, true);
+            } else {
+                return false;
+            }
+            return true; //correctly added
+        }
 
     bool updateKV(uint64_t id, persistent_ptr<T> value, OperationContext* txn = nullptr) {
         persistent_ptr<T> temp;
@@ -179,17 +196,19 @@ public:
                 for(int i = 0; i < _size; i++) {
                     std::cout << "Lista nr: " << i << std::endl;
                     _list[i]->clear(txn, this);
+
+                    if (txn)
+                        txn->recoveryUnit()->registerChange(new DropListChange(pop, _list, i));
+
                     delete_persistent<PmseListIntPtr>(_list[i]);
+                    _list[i] = nullptr;
                 }
                 initialize(true);
             });
-
             _counter = 0;
             _hashmapSize = 0;
             _counterCapped = 0;
             _dataSize = 0;
-            txn->recoveryUnit()->abortUnitOfWork();
-            _list[0]->reverseList();
         } catch (nvml::transaction_alloc_error &e) {
             std::cout << e.what() << std::endl;
             status = false;
@@ -197,7 +216,6 @@ public:
             std::cout << e.what() << std::endl;
             status = false;
         }
-        std::cout << "-----------------------------------------------------------------------";
         return status;
     }
 
@@ -239,14 +257,15 @@ private:
         return {};
     }
 
-    persistent_ptr<KVPair> truncateId(p<uint64_t> id) {
+    persistent_ptr<KVPair> truncateId(uint64_t _id) {
         persistent_ptr<KVPair> temp = nullptr;
         if(_deleted == nullptr) {
-            if(id != std::numeric_limits<uint64_t>::max()-1) {
+            if(_id != std::numeric_limits<uint64_t>::max()-1) {
+                this->_counter++;
                 try {
                     transaction::exec_tx(pop, [&] {
                         temp = make_persistent<KVPair>();
-                        temp->idValue = id;
+                        temp->idValue = _id;
                     });
                 } catch (std::exception &e) {
                     std::cout << "Next id generation: " << e.what() << std::endl;
@@ -256,8 +275,8 @@ private:
             }
         } else {
             temp = _deleted;
-            uint64_t id2 = 0;
-            id2 = _deleted->idValue;
+            uint64_t id = 0;
+            id = _deleted->idValue;
             _deleted = _deleted->next;
             return temp;
         }
