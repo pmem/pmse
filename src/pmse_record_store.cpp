@@ -135,11 +135,6 @@ StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
         return StatusWith<RecordId>(ErrorCodes::InternalError,
                                     "Not allocated memory!");
     id = _mapper->insert(obj);
-
-    //log() << "------------------ID: " << id;
-    //if(id > 200)
-        //txn->recoveryUnit()->abortUnitOfWork();
-
     _mapper->changeSize(len);
     if(!id)
         return StatusWith<RecordId>(ErrorCodes::OperationFailed,
@@ -187,7 +182,7 @@ void PmseRecordStore::setCappedCallback(CappedCallback* cb) {
     _cappedCallback = cb;
 }
 
-void PmseRecordStore::temp_cappedTruncateAfter(OperationContext* txn, RecordId end,
+void PmseRecordStore::cappedTruncateAfter(OperationContext* txn, RecordId end,
                                                bool inclusive) {
     PmseRecordCursor cursor(_mapper, true);
     auto rec = cursor.seekExact(end);

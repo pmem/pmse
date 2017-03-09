@@ -171,7 +171,7 @@ class PmseRecordStore : public RecordStore {
         return Status::OK();
     }
 
-    virtual void temp_cappedTruncateAfter(OperationContext* txn, RecordId end,
+    virtual void cappedTruncateAfter(OperationContext* txn, RecordId end,
                                           bool inclusive);
 
     virtual Status validate(OperationContext* txn, bool full, bool scanData,
