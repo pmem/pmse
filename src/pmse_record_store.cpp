@@ -245,38 +245,62 @@ PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper, boo
 void PmseRecordCursor::moveToNext(bool inNext) {
     auto cursor = _cur;
     auto listNumber = (actual == -1 ? 0 : static_cast<int64_t>(actual));
-    if(cursor != nullptr) {
-        if(cursor->next != nullptr) {
-            cursor = cursor->next;
-        } else {
-            cursor = nullptr;
-            while(cursor == nullptr && listNumber < _mapper->_size) {
+    if(listNumber != -1 && _lastMoveWasRestore) {
+        _lastMoveWasRestore = false;
+        auto item = _mapper->getFirstPtr(actual);
+        while(item != nullptr) {
+            if(item->position >= position) {
+                _cur = item;
+                break;
+            }
+            item = item->next;
+        }
+        if(item == nullptr) {
+            while(item == nullptr && listNumber < _mapper->_size) {
+                persistent_ptr<KVPair> head = _mapper->getFirstPtr(listNumber);
+                if(head != nullptr) {
+                    item = head;
+                    break;
+                }
                 listNumber++;
+            }
+        }
+        cursor = item;
+    } else {
+        if(cursor != nullptr) {
+            if(cursor->next != nullptr) {
+                cursor = cursor->next;
+            } else {
+                cursor = nullptr;
+                while(cursor == nullptr && listNumber < _mapper->_size) {
+                    listNumber++;
+                    persistent_ptr<KVPair> head = _mapper->getFirstPtr(listNumber);
+                    if(head != nullptr) {
+                        cursor = head;
+                        break;
+                    }
+                }
+            }
+        } else { //cursor == nullptr
+            while(cursor == nullptr && listNumber < _mapper->_size) {
                 persistent_ptr<KVPair> head = _mapper->getFirstPtr(listNumber);
                 if(head != nullptr) {
                     cursor = head;
                     break;
                 }
+                listNumber++;
             }
-        }
-    } else { //cursor == nullptr
-        while(cursor == nullptr && listNumber < _mapper->_size) {
-            persistent_ptr<KVPair> head = _mapper->getFirstPtr(listNumber);
-            if(head != nullptr) {
-                cursor = head;
-                break;
-            }
-            listNumber++;
         }
     }
 
     if(inNext) {
         _cur = cursor;
         actual = listNumber;
-    } else {
-        _restorePoint = cursor;
-        _actualAfterRestore = listNumber;
     }
+    if(_cur != nullptr)
+        position = _cur->position;
+    else
+        _eof = true;
 }
 
 Status PmseRecordStore::validate(OperationContext* txn,
@@ -319,18 +343,15 @@ Status PmseRecordStore::validate(OperationContext* txn,
 boost::optional<Record> PmseRecordCursor::next() {
     if(_eof)
         return boost::none;
-    if(_lastMoveWasRestore) {
-        _lastMoveWasRestore = false;
-    } else {
-        if(_forward)
-            moveToNext();
-        else
-            moveBackward();
-    }
+    if(_forward)
+        moveToNext();
+    else
+        moveBackward();
     if(_cur == nullptr || _eof) {
         _eof = true;
         return boost::none;
     }
+    position = _cur->position;
     RecordId a((int64_t) _cur->idValue);
     RecordData b(_cur->ptr->data, _cur->ptr->size);
     return { {a,b}};
@@ -346,36 +367,28 @@ boost::optional<Record> PmseRecordCursor::seekExact(const RecordId& id) {
     if (!status || !obj) {
         return boost::none;
     }
+    position = _cur->position;
     RecordId a(id.repr());
     RecordData b(obj->data, obj->size);
     return {{a,b}};
 }
 
 void PmseRecordCursor::save() {
-    moveToNext(false);
+    _positionCheck = true;
 }
 
 bool PmseRecordCursor::restore() {
-    if(_mapper->isCapped() && _restorePoint == nullptr) {
+    if(_positionCheck) {
+        _positionCheck = false;
+        if(checkPosition() && _cur != nullptr && !_mapper->hasId(_cur->idValue))
+            _lastMoveWasRestore = true;
+    }
+    if(_mapper->isCapped()) {
         _eof = true;
         return false;
     }
     if(_eof)
         return true;
-    if(_restorePoint == nullptr) {
-        _eof = true;
-        return true;
-    }
-    if(_cur == nullptr) {
-        _cur = _restorePoint;
-        return true;
-    }
-    if(!_mapper->hasId(_cur->idValue)) {
-        _cur = _restorePoint;
-        _restorePoint = nullptr;
-        _lastMoveWasRestore = true;
-        actual = _actualAfterRestore;
-    }
     return true;
 }
 
@@ -453,5 +466,13 @@ void PmseRecordCursor::moveBackward() {
         _eof = true;
     }
 }
+
+bool PmseRecordCursor::checkPosition() {
+        if(_cur != nullptr && _cur->position != position) { // Can come back to list, but with another pos
+            return false;
+        }
+        return true;
+    }
+
 }
 
