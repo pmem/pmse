@@ -70,6 +70,7 @@ void PmseListIntPtr::insertKV(const persistent_ptr<KVPair> &key,
         transaction::exec_tx(pop, [this, &key, &value] {
             key->ptr = value;
             key->next = nullptr;
+            key->position = counter++;
             if (head != nullptr) {
                 tail->next = key;
                 tail = key;

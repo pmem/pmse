@@ -64,6 +64,7 @@ struct _pair {
     p<uint64_t> idValue;
     persistent_ptr<InitData> ptr;
     persistent_ptr<_pair> next;
+    p<uint64_t> position;
 };
 
 typedef struct _pair KVPair;

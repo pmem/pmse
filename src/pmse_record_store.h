@@ -79,6 +79,7 @@ class PmseRecordCursor final : public SeekableRecordCursor {
     void moveToNext(bool inNext = true);
     void moveToLast();
     void moveBackward();
+    bool checkPosition();
 
     persistent_ptr<PmseMap<InitData>> _mapper;
     persistent_ptr<KVPair> _before;
@@ -88,8 +89,10 @@ class PmseRecordCursor final : public SeekableRecordCursor {
     p<bool> _isCapped;
     p<bool> _forward;
     p<bool> _lastMoveWasRestore;
+    p<bool> _positionCheck;
     p<int64_t> actual = -1;
     p<int64_t> _actualAfterRestore = 0;
+    p<uint64_t> position;
     PMEMoid _currentOid = OID_NULL;
 };
 
