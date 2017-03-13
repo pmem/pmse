@@ -760,6 +760,8 @@ void PmseCursor::restore() {
         return;
 
     node = find_leaf(_tree->root, _cursorKey, _ordering);
+    if (node == nullptr)
+        return;
 
     for (i = 0; i < node->num_keys; i++) {
         cmp = _cursorKey.woCompare(node->keys[i].getBSON(), _ordering, false);
