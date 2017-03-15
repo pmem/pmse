@@ -79,7 +79,7 @@ Status PmseEngine::createRecordStore(OperationContext* opCtx, StringData ns, Str
                                      const CollectionOptions& options) {
     auto status = Status::OK();
     try {
-        auto record_store = stdx::make_unique<PmseRecordStore>(ns, ident, options, _DBPATH, _pool_handler);
+        auto record_store = stdx::make_unique<PmseRecordStore>(ns, ident, options, _DBPATH, &_pool_handler);
         identList->insertKV(ident.toString().c_str(), ns.toString().c_str());
 
     } catch(std::exception &e) {
@@ -93,14 +93,14 @@ std::unique_ptr<RecordStore> PmseEngine::getRecordStore(OperationContext* opCtx,
                                                         StringData ident,
                                                         const CollectionOptions& options) {
     identList->update(ident.toString().c_str(), ns.toString().c_str());
-    return stdx::make_unique<PmseRecordStore>(ns, ident, options, _DBPATH, _pool_handler);
+    return stdx::make_unique<PmseRecordStore>(ns, ident, options, _DBPATH, &_pool_handler);
 }
 
 Status PmseEngine::createSortedDataInterface(OperationContext* opCtx,
                                              StringData ident,
                                              const IndexDescriptor* desc) {
     try {
-        auto sorted_data_interface = PmseSortedDataInterface(ident, desc, _DBPATH, _pool_handler);
+        auto sorted_data_interface = PmseSortedDataInterface(ident, desc, _DBPATH, &_pool_handler);
         identList->insertKV(ident.toString().c_str(), "");
     } catch (std::exception &e) {
         return Status(ErrorCodes::OutOfDiskSpace, e.what());
@@ -111,7 +111,7 @@ Status PmseEngine::createSortedDataInterface(OperationContext* opCtx,
 SortedDataInterface* PmseEngine::getSortedDataInterface(OperationContext* opCtx,
                                                         StringData ident,
                                                         const IndexDescriptor* desc) {
-    return new PmseSortedDataInterface(ident, desc, _DBPATH, _pool_handler);
+    return new PmseSortedDataInterface(ident, desc, _DBPATH, &_pool_handler);
 }
 
 Status PmseEngine::dropIdent(OperationContext* opCtx, StringData ident) {

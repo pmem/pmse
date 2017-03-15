@@ -46,6 +46,7 @@
 #include "mongo/platform/basic.h"
 #include "mongo/db/catalog/collection_options.h"
 #include "mongo/db/storage/capped_callback.h"
+#include "mongo/db/storage/record_store.h"
 #include "mongo/stdx/memory.h"
 
 using namespace nvml::obj;
@@ -90,7 +91,7 @@ class PmseRecordCursor final : public SeekableRecordCursor {
     p<bool> _forward;
     p<bool> _lastMoveWasRestore;
     p<bool> _positionCheck;
-    p<int64_t> actual = -1;
+    p<int64_t> actualListNumber = -1;
     p<int64_t> _actualAfterRestore = 0;
     p<uint64_t> position;
     PMEMoid _currentOid = OID_NULL;
@@ -101,7 +102,7 @@ class PmseRecordStore : public RecordStore {
     PmseRecordStore(StringData ns, StringData ident,
                     const CollectionOptions& options,
                     StringData dbpath,
-                    std::map<std::string, pool_base> &pool_handler);
+                    std::map<std::string, pool_base> *pool_handler);
 
     ~PmseRecordStore() = default;
 
