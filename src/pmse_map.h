@@ -80,7 +80,6 @@ public:
 
     uint64_t insert(persistent_ptr<T> value) {
         auto id = getNextId();
-        //LOCK_GUARD PER LIST
         std::lock_guard<nvml::obj::mutex> lock(_listMutex[id->idValue % _size]);
         if (!insertKV(id, value)) {
             return -1;
@@ -117,7 +116,6 @@ public:
 
     bool updateKV(uint64_t id, persistent_ptr<T> value, OperationContext* txn = nullptr) {
         persistent_ptr<T> temp;
-        std::lock_guard<nvml::obj::mutex> lock(_listMutex[id % _size]);
         if (find(id, temp)) {
             _list[id % _size]->update(id, value, txn);
         } else {
@@ -139,8 +137,10 @@ public:
     }
 
     bool remove(uint64_t id, OperationContext* txn = nullptr) {
-        _list[id % _size]->deleteKV(id, _deleted, txn);
         _hashmapSize--;
+        persistent_ptr<KVPair> toDeleted;
+        _list[id % _size]->deleteKV(id, toDeleted, txn);
+        moveToDeleted(toDeleted, _deleted);
         return true;
     }
 
@@ -211,6 +211,23 @@ public:
     uint64_t getMaxSize() const {
         return _maxDocuments;
     }
+
+    void moveToDeleted(persistent_ptr<KVPair> &item, persistent_ptr<KVPair> &list) {
+        std::lock_guard<nvml::obj::mutex> guard(_pmutex);
+        if (list != nullptr) {
+            item->next = list;
+            list = item;
+        } else {
+            item->next = nullptr;
+            list = item;
+        }
+    }
+
+    int getHashmapSize() {
+        return _size;
+    }
+
+    nvml::obj::mutex _listMutex[HASHMAP_SIZE];
 private:
     const int _size;
     const bool _isCapped;
@@ -222,9 +239,8 @@ private:
     p<uint64_t> _sizeOfCollection;
     p<uint64_t> _counterCapped = 0;
     persistent_ptr<persistent_ptr<PmseListIntPtr>[]> _list;
-    //Add mutexes
+
     nvml::obj::mutex _pmutex;
-    nvml::obj::mutex _listMutex[HASHMAP_SIZE];
     persistent_ptr<KVPair> _deleted;
 
     persistent_ptr<KVPair> getFirstPtr(int listNumber) {
@@ -234,7 +250,6 @@ private:
     }
 
     persistent_ptr<KVPair> getNextId() {
-        //SCOPE LOCK
         std::lock_guard<nvml::obj::mutex> guard(_pmutex);
         persistent_ptr<KVPair> temp = nullptr;
         if(_deleted == nullptr) {

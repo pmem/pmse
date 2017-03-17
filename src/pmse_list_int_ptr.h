@@ -41,6 +41,7 @@
 #define SRC_PMSE_LIST_INT_PTR_H_
 
 #include <libpmemobj++/make_persistent.hpp>
+#include <libpmemobj++/mutex.hpp>
 #include <libpmemobj++/p.hpp>
 #include <libpmemobj++/persistent_ptr.hpp>
 #include <libpmemobj++/pext.hpp>
@@ -49,6 +50,7 @@
 
 #include "mongo/db/operation_context.h"
 
+#include <mutex>
 #include <vector>
 
 using namespace nvml::obj;

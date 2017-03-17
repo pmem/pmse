@@ -44,6 +44,7 @@
 #include "mongo/db/storage/recovery_unit.h"
 
 #include <exception>
+#include <mutex>
 
 #include "mongo/util/log.h"
 
@@ -115,13 +116,7 @@ int64_t PmseListIntPtr::deleteKV(uint64_t key,
                     }
                 }
                 _size--;
-                if (deleted != nullptr) {
-                    rec->next = deleted;
-                    deleted = rec;
-                } else {
-                    rec->next = nullptr;
-                    deleted = rec;
-                }
+                deleted = rec;
                 if (txn) {
                     auto rd = RecordData(deleted->ptr->data, deleted->ptr->size);
                     txn->recoveryUnit()->registerChange(new RemoveChange(pop, (deleted->ptr).get(), rd.size()));

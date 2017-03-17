@@ -46,6 +46,7 @@
 #include "pmse_engine.h"
 
 #include <cstdlib>
+#include <mutex>
 
 namespace mongo {
 
@@ -77,6 +78,7 @@ PmseEngine::~PmseEngine() {
 
 Status PmseEngine::createRecordStore(OperationContext* opCtx, StringData ns, StringData ident,
                                      const CollectionOptions& options) {
+    std::lock_guard<std::mutex> lock(_pmutex);
     auto status = Status::OK();
     try {
         auto record_store = stdx::make_unique<PmseRecordStore>(ns, ident, options, _DBPATH, &_pool_handler);
@@ -99,6 +101,7 @@ std::unique_ptr<RecordStore> PmseEngine::getRecordStore(OperationContext* opCtx,
 Status PmseEngine::createSortedDataInterface(OperationContext* opCtx,
                                              StringData ident,
                                              const IndexDescriptor* desc) {
+    std::lock_guard<std::mutex> lock(_pmutex);
     try {
         auto sorted_data_interface = PmseSortedDataInterface(ident, desc, _DBPATH, &_pool_handler);
         identList->insertKV(ident.toString().c_str(), "");
@@ -115,6 +118,7 @@ SortedDataInterface* PmseEngine::getSortedDataInterface(OperationContext* opCtx,
 }
 
 Status PmseEngine::dropIdent(OperationContext* opCtx, StringData ident) {
+    std::lock_guard<std::mutex> lock(_pmutex);
     boost::filesystem::path path(_DBPATH);
     identList->deleteKV(ident.toString().c_str());
     if ( _pool_handler.count(ident.toString()) > 0 ) {
