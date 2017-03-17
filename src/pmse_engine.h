@@ -46,6 +46,7 @@
 #include "pmse_recovery_unit.h"
 
 #include <libpmemobj.h>
+#include <libpmemobj++/mutex.hpp>
 #include <libpmemobj++/p.hpp>
 #include <libpmemobj++/persistent_ptr.hpp>
 #include <libpmemobj++/pool.hpp>
@@ -140,6 +141,7 @@ public:
     void setJournalListener(JournalListener* jl) final {}
 
 private:
+    std::mutex _pmutex;
     std::map<std::string, pool_base> _pool_handler;
     std::shared_ptr<void> _catalogInfo;
     const std::string _DBPATH;

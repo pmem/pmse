@@ -35,6 +35,12 @@
 #include "pmse_record_store.h"
 #include "pmse_change.h"
 
+#include "errno.h"
+
+#include <cstdlib>
+#include <mutex>
+
+#include <libpmemobj++/mutex.hpp>
 #include <libpmemobj++/transaction.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
@@ -79,7 +85,7 @@ PmseRecordStore::PmseRecordStore(StringData ns,
             try {
                 mapPool = pool<root>::create(mapper_filename, "kvmapper",
                                              (ns.toString() == "local.startup_log" ||
-                                                             ns.toString() == "_mdb_catalog" ? 3 : 8)
+                                                             ns.toString() == "_mdb_catalog" ? 10 : 80)
                                                              * PMEMOBJ_MIN_POOL);
             } catch (std::exception &e) {
                 log() << "Error handled: " << e.what();
@@ -136,7 +142,6 @@ StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
     if (obj == nullptr)
         return StatusWith<RecordId>(ErrorCodes::InternalError,
                                     "Not allocated memory!");
-    // TU LOCK_GUARDa na RW / LOCK tylko na liste, ktora bedzie modyfikowana
     id = _mapper->insert(obj);
     _mapper->changeSize(len);
     if (!id)
@@ -154,6 +159,7 @@ Status PmseRecordStore::updateRecord(OperationContext* txn, const RecordId& oldL
                                      const char* data, int len, bool enforceQuota,
                                      UpdateNotifier* notifier) {
     persistent_ptr<InitData> obj;
+    std::lock_guard<nvml::obj::mutex> lock(_mapper->_listMutex[oldLocation.repr() % _mapper->getHashmapSize()]);
     try {
         transaction::exec_tx(mapPool, [&obj, len, data, txn, oldLocation, this] {
             obj = pmemobj_tx_alloc(sizeof(InitData::size) + len, 1);
@@ -175,6 +181,7 @@ Status PmseRecordStore::updateRecord(OperationContext* txn, const RecordId& oldL
 
 void PmseRecordStore::deleteRecord(OperationContext* txn,
                                       const RecordId& dl) {
+    std::lock_guard<nvml::obj::mutex> lock(_mapper->_listMutex[dl.repr() % _mapper->getHashmapSize()]);
     persistent_ptr<KVPair> p;
     _mapper->getPair(dl.repr(), p);
     _mapper->remove((uint64_t) dl.repr(), txn);
