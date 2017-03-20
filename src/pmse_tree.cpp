@@ -469,14 +469,19 @@ persistent_ptr<PmseTreeNode> PmseTree::coalesceNodes(
     }
 
     k_prime_temp = k_prime.getBSON();
-    for (i = 0; i < n->parent->num_keys; i++) {
-        int cmp = k_prime_temp.woCompare(n->parent->keys[i].getBSON(),
-                        _ordering, false);
-        if (cmp == 0) {
-            break;
+    if(neighbor_index==-1) {
+        for (i = 0; i < n->parent->num_keys; i++) {
+            int cmp = k_prime_temp.woCompare(n->parent->keys[i].getBSON(),
+                            _ordering, false);
+            if (cmp == 0) {
+                break;
+            }
         }
     }
-
+    else
+    {
+       i = neighbor_index;
+    }
     root = deleteEntry(pop, k_prime_temp, n->parent, i);
 
     delete_persistent<BSONObj_PM[TREE_ORDER]>(n->keys);
