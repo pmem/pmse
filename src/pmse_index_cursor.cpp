@@ -142,7 +142,6 @@ void PmseCursor::setEndPosition(const BSONObj& key, bool inclusive) {
         _endPosition = nullptr;
         return;
     }
-
     /*
      * Find leaf node where key may exist
      */
@@ -308,6 +307,33 @@ void PmseCursor::setEndPosition(const BSONObj& key, bool inclusive) {
 }
 
 boost::optional<IndexKeyEntry> PmseCursor::next(
+                RequestedInfo parts = kKeyAndLoc) {
+    boost::optional<IndexKeyEntry> entry;
+    entry = iterateToNext(parts);
+    if(!entry.is_initialized())
+    {
+        return entry;
+    }
+
+    if(!_wasMoved)
+    {
+        moveToNext();
+        _wasMoved = true;
+    }
+    if(_cursor.node.raw_ptr()->off != 0)
+    {
+        _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
+        _cursorId = _cursor.node->values_array[_cursor.index];
+        //remember next value
+    }
+    else
+    {
+        _eofRestore = true;
+    }
+    return entry;
+}
+
+boost::optional<IndexKeyEntry> PmseCursor::iterateToNext(
                 RequestedInfo parts = kKeyAndLoc) {
     /*
      * Advance cursor in leaves
@@ -476,8 +502,29 @@ void PmseCursor::moveToNext() {
 boost::optional<IndexKeyEntry> PmseCursor::seek(
                 const BSONObj& key, bool inclusive, RequestedInfo parts =
                                 kKeyAndLoc) {
+    boost::optional<IndexKeyEntry> entry;
     const auto discriminator = inclusive ? KeyString::kInclusive : KeyString::kExclusiveBefore;
-    return seekInTree(key, discriminator, parts);
+    /**
+     * Remember current search result to return it
+     */
+    entry = seekInTree(key, discriminator, parts);
+    /**
+     * Remember next value to find it on next in case of deletion
+     */
+    if(_cursor.node.raw_ptr()->off != 0)
+    {
+        moveToNext();
+        _wasMoved = true;
+    }
+    if(_cursor.node.raw_ptr()->off != 0) {
+        _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
+        _cursorId = _cursor.node->values_array[_cursor.index];
+        //remember next value
+    }
+    else {
+        _eofRestore = true;
+    }
+    return entry;
 }
 
 
@@ -532,6 +579,7 @@ boost::optional<IndexKeyEntry> PmseCursor::seekInTree(
     }
 
     node = find_leaf(_tree->root, key, _ordering);
+
     if (node == NULL)
         return boost::none;
 
@@ -552,7 +600,7 @@ boost::optional<IndexKeyEntry> PmseCursor::seekInTree(
         _cursor.node = node;
         _cursor.index = i - 1;
         if (_forward) {
-            next(parts);
+            moveToNext();
             if (!_cursor.node) {
                 return boost::none;
             }
@@ -597,11 +645,17 @@ boost::optional<IndexKeyEntry> PmseCursor::seekInTree(
                                 _cursor.node->keys[_cursor.index].getBSON(),
                                 _cursor.node->values_array[_cursor.index]);
             } else {
-                return next();
+                moveToNext();
+                return IndexKeyEntry(
+                        _cursor.node->keys[_cursor.index].getBSON(),
+                        _cursor.node->values_array[_cursor.index]);
             }
         } else
         {
-            return next();
+            moveToNext();
+            return IndexKeyEntry(
+                        _cursor.node->keys[_cursor.index].getBSON(),
+                        _cursor.node->values_array[_cursor.index]);
         }
     }
     /*
@@ -616,7 +670,7 @@ boost::optional<IndexKeyEntry> PmseCursor::seekInTree(
         while (key.woCompare(
                         _cursor.node->keys[_cursor.index].getBSON(),
                         _ordering, false) == 0) {
-            next(parts);
+            moveToNext();
             if (!_cursor.node) {
                 return boost::none;
             }
@@ -702,7 +756,7 @@ boost::optional<IndexKeyEntry> PmseCursor::seekInTree(
 boost::optional<IndexKeyEntry> PmseCursor::seek(
                 const IndexSeekPoint& seekPoint,
                 RequestedInfo parts = kKeyAndLoc) {
-
+    boost::optional<IndexKeyEntry> entry;
     BSONObj key = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
     auto discriminator = KeyString::kInclusive;
 
@@ -719,7 +773,21 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(
             }
         }
     }
-    return seekInTree(key, discriminator, parts);
+    entry = seekInTree(key, discriminator, parts);
+    if(_cursor.node.raw_ptr()->off != 0)
+    {
+        moveToNext();
+        _wasMoved = true;
+    }
+    if(_cursor.node.raw_ptr()->off != 0) {
+        _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
+        _cursorId = _cursor.node->values_array[_cursor.index];
+        //remember next value
+    }
+    else {
+        _eofRestore = true;
+    }
+    return entry;
 }
 
 boost::optional<IndexKeyEntry> PmseCursor::seekExact(
@@ -731,20 +799,6 @@ boost::optional<IndexKeyEntry> PmseCursor::seekExact(
 }
 
 void PmseCursor::save() {
-    if(!_wasMoved)
-        moveToNext();
-    _wasMoved = true;
-    if(_cursor.node.raw_ptr()->off != 0)
-    {
-        _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
-        _cursorId = _cursor.node->values_array[_cursor.index];
-        //remember next value
-    }
-    else
-    {
-        _eofRestore = true;
-    }
-
 }
 
 void PmseCursor::saveUnpositioned() {
