@@ -63,6 +63,7 @@ public:
     void reattachToOperationContext(OperationContext* opCtx);
 
 private:
+    virtual boost::optional<IndexKeyEntry> iterateToNext(RequestedInfo parts);
     boost::optional<IndexKeyEntry> seekInTree(const BSONObj& key, KeyString::Discriminator discriminator,
                                         RequestedInfo parts);
     persistent_ptr<PmseTreeNode> find_leaf(persistent_ptr<PmseTreeNode> node,
