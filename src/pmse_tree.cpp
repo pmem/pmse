@@ -98,13 +98,16 @@ bool PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
                       bool dupsAllowed, const BSONObj& ordering, OperationContext* txn = nullptr) {
 
     persistent_ptr<PmseTreeNode> node;
+    persistent_ptr<PmseTreeNode> tempNode;
     RecordId key_record;
     uint64_t recordIndex;
     uint64_t i;
     int64_t cmp;
+    std::lock_guard<nvml::obj::mutex> lock(pmutex);
     _ordering = ordering;
     //find node with key
     node = locateLeafWithKey(root, key, _ordering);
+    tempNode = node;
     //find place in node
     for (i = 0; i < node->num_keys; i++) {
         key_record = node->values_array[i];
@@ -129,6 +132,33 @@ bool PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
                             }
                         }
                     }
+                    key_record = node->values_array[i];
+                    if (key_record.repr() != loc.repr()) {
+                        /**
+                         * Start looking for in other direction, staring from node returned by find_node().
+                         */
+                        node = tempNode;
+                        i=0;
+                        while ((key.woCompare(node->keys[i].getBSON(), _ordering,
+                                        false) == 0)
+                                        && (node->values_array[i]).repr()
+                                                        != loc.repr()) {
+                            if (i < node->num_keys-1) {
+                                i++;
+                            } else {
+                                if (node->next) {
+                                    node = node->next;
+                                    i = 0;
+                                } else {
+                                    return false;
+                                }
+                            }
+                        }
+
+                        if(key.woCompare(node->keys[i].getBSON(), _ordering, false) != 0){
+                            return false;
+                        }
+                    }
                 }
             }
             /*
@@ -139,40 +169,41 @@ bool PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
         }
     }
     //didn't find value in node - it must be in previous one - only for non-unique values
-    if(i==(node->num_keys))
-    {
-
+    if(i==(node->num_keys)) {
         if (dupsAllowed) {
-            if(node->previous)
-            {
+            if(node->previous) {
                 node=node->previous;
                 i = node->num_keys-1;
-                while((key.woCompare(node->keys[i].getBSON(), _ordering, false)==0) && (node->values_array[i]).repr() != loc.repr())
-                {
-                    if(i>0)
+                if((key.woCompare(node->keys[i].getBSON(), _ordering, false)==0)) {
+                    while((key.woCompare(node->keys[i].getBSON(), _ordering, false)==0) && (node->values_array[i]).repr() != loc.repr())
                     {
-                        i--;
-                    }
-                    else
-                    {
-                        if(node->previous)
-                        {
-                            node=node->previous;
-                            i = node->num_keys-1;
+                        if(i>0) {
+                            i--;
                         }
-                        else
-                        {
-                            return false;
+                        else {
+                            if(node->previous) {
+                                node=node->previous;
+                                i = node->num_keys-1;
+                            }
+                            else {
+                                return false;
+                            }
                         }
                     }
                 }
+                else{
+                    return false;
+                }
             }
-            else
-            {
+            else {
                 return false;
             }
         }
+        else {
+            return false;
+        }
     }
+
 
     /*
      * Remove value
@@ -969,6 +1000,7 @@ Status PmseTree::insert(pool_base pop, BSONObj_PM& key, const RecordId& loc,
     Status status = Status::OK();
     uint64_t i;
     int64_t cmp;
+    std::lock_guard<nvml::obj::mutex> lock(pmutex);
 
     if (!root)   //root not allocated yet
     {
