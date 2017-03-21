@@ -74,7 +74,6 @@ DropListChange::DropListChange(pool_base pop, persistent_ptr<persistent_ptr<Pmse
 void DropListChange::commit() {}
 void DropListChange::rollback()
 {
-
     if(_list[_ID] == nullptr){
         transaction::exec_tx(_pop, [&] {
             _list[_ID] = make_persistent<PmseListIntPtr>();
