@@ -183,9 +183,10 @@ void PmseRecordStore::deleteRecord(OperationContext* txn,
                                       const RecordId& dl) {
     std::lock_guard<nvml::obj::mutex> lock(_mapper->_listMutex[dl.repr() % _mapper->getHashmapSize()]);
     persistent_ptr<KVPair> p;
-    _mapper->getPair(dl.repr(), p);
-    _mapper->remove((uint64_t) dl.repr(), txn);
-    _mapper->changeSize(-p->ptr->size);
+    if (_mapper->getPair(dl.repr(), p)) {
+        _mapper->remove((uint64_t) dl.repr(), txn);
+        _mapper->changeSize(-p->ptr->size);
+    }
 }
 
 void PmseRecordStore::setCappedCallback(CappedCallback* cb) {
