@@ -101,6 +101,7 @@ private:
 
     bool _wasMoved;
     bool _eofRestore;
+    bool _wasRestore=false;
 
 };
 }
