@@ -309,12 +309,18 @@ void PmseCursor::setEndPosition(const BSONObj& key, bool inclusive) {
 boost::optional<IndexKeyEntry> PmseCursor::next(
                 RequestedInfo parts = kKeyAndLoc) {
     boost::optional<IndexKeyEntry> entry;
+    /**
+     * Find next correct value for cursor
+     */
     entry = iterateToNext(parts);
     if(!entry.is_initialized())
     {
         return entry;
     }
 
+    /**
+     * Move to next and remember it
+     */
     if(!_wasMoved)
     {
         moveToNext();
@@ -338,6 +344,14 @@ boost::optional<IndexKeyEntry> PmseCursor::iterateToNext(
     /*
      * Advance cursor in leaves
      */
+
+    persistent_ptr<PmseTreeNode> node;
+    CursorObject _previousCursor;
+    uint64_t i;
+    int64_t cmp;
+    bool found = false;
+    bool foundKey = false;
+
     if (!_tree->root)
     {
         return boost::none;
@@ -352,13 +366,73 @@ boost::optional<IndexKeyEntry> PmseCursor::iterateToNext(
         return boost::none;
     }
 
+    /**
+     * Restore location of cursor after tree modification.
+     */
+    if(_wasRestore)
+    {
+        node = find_leaf(_tree->root, _cursorKey, _ordering);
+        for (i = 0; i < node->num_keys; i++) {
+            cmp = _cursorKey.woCompare(node->keys[i].getBSON(), _ordering, false);
+            if (cmp == 0)
+            {
+                foundKey = true;
+                if( _cursorId == node->values_array[i])
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if(cmp<0)   //stop iterating when found bigger
+            {
+                break;
+            }
+        }
+        if(found)
+        {
+            _cursor.node = node;
+            _cursor.index = i;
+            found = false;
+        }
+        else
+        {
+            if(foundKey) //key was found, but with wrong ID - check previous
+            {
+                _previousCursor.node = node;
+                _previousCursor.index = i;
+                while(previous(_previousCursor))
+                {
+                    cmp = _cursorKey.woCompare(_previousCursor.node->keys[_previousCursor.index].getBSON(), _ordering, false);
+                    if(cmp==0 && _cursorId==_previousCursor.node->values_array[_previousCursor.index])
+                    {
+                        _cursor.node = _previousCursor.node;
+                        _cursor.index = _previousCursor.index;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                _cursor.node = node;
+                _cursor.index = i;
+            }
+        }
+        _wasMoved = true;
+        _wasRestore = false;
+    }
+
+    /**
+     * Do step forward
+     */
     if(!_wasMoved)
     {
         moveToNext();
     }
     _wasMoved = false;
 
-
+    /**
+     * Iterate position to next correct value if needed
+     */
     do{
         if(_cursor.node)
         {
@@ -805,46 +879,10 @@ void PmseCursor::saveUnpositioned() {
 }
 
 void PmseCursor::restore() {
-    persistent_ptr<PmseTreeNode> node;
-    CursorObject _previousCursor;
-    uint64_t i;
-    int64_t cmp;
-    bool found = false;
     if(_eofRestore)
         return;
 
-    node = find_leaf(_tree->root, _cursorKey, _ordering);
-    if (node == nullptr)
-        return;
-
-    for (i = 0; i < node->num_keys; i++) {
-        cmp = _cursorKey.woCompare(node->keys[i].getBSON(), _ordering, false);
-        if (cmp == 0 && _cursorId == node->values_array[i]) {
-            found = true;
-            break;
-        }
-    }
-    if(found)
-    {
-        _cursor.node = node;
-        _cursor.index = i;
-        found = false;
-    }
-    else
-    {
-        _previousCursor.node = node;
-        _previousCursor.index = i;
-        while(previous(_previousCursor))
-        {
-            cmp = _cursorKey.woCompare(_previousCursor.node->keys[_previousCursor.index].getBSON(), _ordering, false);
-            if(cmp==0 && _cursorId==_previousCursor.node->values_array[_previousCursor.index])
-            {
-                _cursor.node = _previousCursor.node;
-                _cursor.index = _previousCursor.index;
-                break;
-            }
-        }
-    }
+    _wasRestore=true;
 }
 
 void PmseCursor::detachFromOperationContext() {
