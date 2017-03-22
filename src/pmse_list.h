@@ -84,7 +84,7 @@ private:
     persistent_ptr<KVPair> tail;
     p<uint64_t> counter;
     pool<PmseList> pool_obj;
-    std::mutex _pmutex;
+    nvml::obj::mutex _pmutex;
     PmseList() {}
 };
 
