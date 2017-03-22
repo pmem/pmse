@@ -57,7 +57,7 @@ using namespace nvml::obj;
 namespace mongo {
 
 const uint64_t CAPPED_SIZE = 1;
-const uint64_t HASHMAP_SIZE = 10;
+const uint64_t HASHMAP_SIZE = 1000;
 class PmseRecordCursor;
 
 template<typename T>
@@ -88,15 +88,6 @@ public:
         ++_hashmapSize;
         return id->idValue;
     }
-
-    uint64_t insertTruncate(persistent_ptr<T> value, uint64_t idTruncate) {
-            auto id = getNextId(idTruncate, true);
-            if (!insertToFrontKV(id, value)) {
-                return -1;
-            }
-            _hashmapSize++;
-            return id->idValue;
-        }
 
     uint64_t getCappedFirstId() {
         if(isCapped())
@@ -288,6 +279,9 @@ private:
                     std::cout << "Next id generation: " << e.what() << std::endl;
                 }
             } else {
+                    return nullptr;
+                }
+        } else {
                 temp = _deleted;
                 uint64_t id = 0;
                 id = _deleted->idValue;

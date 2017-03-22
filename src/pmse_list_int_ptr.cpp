@@ -72,17 +72,15 @@ void PmseListIntPtr::insertKV(const persistent_ptr<KVPair> &key,
             if(insertToFront){
                 key->ptr = value;
                 key->next = nullptr;
-                if(head != nullptr){
+                if (head != nullptr){
                     key->next = head;
                     head = key;
-                }
-                else{
+                } else {
                     head = key;
                     tail = head;
                 }
                 _size++;
-            }
-            else{
+            } else {
                 key->ptr = value;
                 key->next = nullptr;
                 if (head != nullptr) {
