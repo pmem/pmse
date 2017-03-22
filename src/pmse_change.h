@@ -38,9 +38,9 @@
 #include <libpmemobj++/p.hpp>
 #include <libpmemobj++/persistent_ptr.hpp>
 
-//#include "pmse_map.h"
 #include "pmse_tree.h"
 #include "pmse_list_int_ptr.h"
+
 #include "mongo/db/record_id.h"
 #include "mongo/db/index/index_descriptor.h"
 

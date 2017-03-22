@@ -68,7 +68,7 @@ void PmseListIntPtr::insertKV(const persistent_ptr<KVPair> &key,
                               const persistent_ptr<InitData> &value, bool insertToFront) {
     try {
         transaction::exec_tx(pop, [this, &key, &value, insertToFront] {
-            if(insertToFront){
+            if (insertToFront){
                 key->ptr = value;
                 key->next = nullptr;
                 if(head != nullptr){
@@ -80,8 +80,7 @@ void PmseListIntPtr::insertKV(const persistent_ptr<KVPair> &key,
                     tail = head;
                 }
                 _size++;
-            }
-            else{
+            } else {
                 key->ptr = value;
                 key->next = nullptr;
                 if (head != nullptr) {

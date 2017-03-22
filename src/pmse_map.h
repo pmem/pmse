@@ -54,7 +54,7 @@ using namespace nvml::obj;
 namespace mongo {
 
 const uint64_t CAPPED_SIZE = 1;
-const uint64_t HASHMAP_SIZE = 10;
+const uint64_t HASHMAP_SIZE = 1000;
 class PmseRecordCursor;
 
 template<typename T>
@@ -84,15 +84,6 @@ public:
         _hashmapSize++;
         return id->idValue;
     }
-
-    uint64_t insertTruncate(persistent_ptr<T> value, uint64_t idTruncate) {
-            auto id = getNextId(idTruncate, true);
-            if (!insertToFrontKV(id, value)) {
-                return -1;
-            }
-            _hashmapSize++;
-            return id->idValue;
-        }
 
     uint64_t getCappedFirstId() {
         if(isCapped())
@@ -248,7 +239,7 @@ private:
         return {};
     }
 
-    persistent_ptr<KVPair> getNextId(uint64_t _id = 0, bool ifTruncate = false) {
+    persistent_ptr<KVPair> getNextId() {
             persistent_ptr<KVPair> temp = nullptr;
             if(_deleted == nullptr) {
                 if(_counter != std::numeric_limits<uint64_t>::max()-1) {
@@ -256,10 +247,7 @@ private:
                     try {
                         transaction::exec_tx(pop, [&] {
                             temp = make_persistent<KVPair>();
-                            if(ifTruncate)
-                                temp->idValue = _id;
-                            else
-                                temp->idValue = _counter;
+                            temp->idValue = _counter;
                         });
                     } catch (std::exception &e) {
                         std::cout << "Next id generation: " << e.what() << std::endl;
