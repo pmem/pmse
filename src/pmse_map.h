@@ -41,6 +41,7 @@
 #define SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_MAP_H_
 
 #include "pmse_list_int_ptr.h"
+#include "pmse_change.h"
 #include <libpmemobj++/p.hpp>
 #include <libpmemobj++/pext.hpp>
 #include <libpmemobj++/pool.hpp>
@@ -114,6 +115,15 @@ public:
         return true; //correctly added
     }
 
+    bool insertToFrontKV(persistent_ptr<KVPair> &id, persistent_ptr<T> value) { //internal use
+        if (!hasId(id->idValue)) {
+                _list[id->idValue % _size]->insertKV(id, value, true);
+            } else {
+                return false;
+            }
+            return true; //correctly added
+        }
+
     bool updateKV(uint64_t id, persistent_ptr<T> value, OperationContext* txn = nullptr) {
         persistent_ptr<T> temp;
         if (find(id, temp)) {
@@ -168,13 +178,18 @@ public:
         return _hashmapSize;
     }
 
-    bool truncate() {
+    bool truncate(OperationContext* txn) {
         bool status = true;
         try {
             transaction::exec_tx(pop, [&] {
                 for(int i = 0; i < _size; i++) {
-                    _list[i]->clear();
+                    _list[i]->clear(txn, this);
+
+                    if (txn)
+                        txn->recoveryUnit()->registerChange(new DropListChange(pop, _list, i));
+
                     delete_persistent<PmseListIntPtr>(_list[i]);
+                    _list[i] = nullptr;
                 }
                 initialize(true);
             });
@@ -250,31 +265,31 @@ private:
     }
 
     persistent_ptr<KVPair> getNextId() {
-        std::lock_guard<nvml::obj::mutex> guard(_pmutex);
-        persistent_ptr<KVPair> temp = nullptr;
-        if(_deleted == nullptr) {
-            if(_counter != std::numeric_limits<uint64_t>::max()-1) {
-                this->_counter++;
-                try {
-                    transaction::exec_tx(pop, [&] {
-                        temp = make_persistent<KVPair>();
-                        temp->idValue = _counter;
-                    });
-                } catch (std::exception &e) {
-                    std::cout << "Next id generation: " << e.what() << std::endl;
+            std::lock_guard<nvml::obj::mutex> guard(_pmutex);
+            persistent_ptr<KVPair> temp = nullptr;
+            if(_deleted == nullptr) {
+                if(_counter != std::numeric_limits<uint64_t>::max()-1) {
+                    this->_counter++;
+                    try {
+                        transaction::exec_tx(pop, [&] {
+                            temp = make_persistent<KVPair>();
+                            temp->idValue = _counter;
+                        });
+                    } catch (std::exception &e) {
+                        std::cout << "Next id generation: " << e.what() << std::endl;
+                    }
+                } else {
+                    return nullptr;
                 }
             } else {
-                return nullptr;
+                temp = _deleted;
+                uint64_t id = 0;
+                id = _deleted->idValue;
+                _deleted = _deleted->next;
+                return temp;
             }
-        } else {
-            temp = _deleted;
-            uint64_t id = 0;
-            id = _deleted->idValue;
-            _deleted = _deleted->next;
             return temp;
         }
-        return temp;
-    }
 };
 
 struct root {
