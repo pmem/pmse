@@ -67,36 +67,32 @@ uint64_t PmseListIntPtr::size() {
 
 void PmseListIntPtr::insertKV(const persistent_ptr<KVPair> &key,
                               const persistent_ptr<InitData> &value, bool insertToFront) {
-    try {
-        transaction::exec_tx(pop, [this, &key, &value, insertToFront] {
-            if (insertToFront){
-                key->ptr = value;
-                key->next = nullptr;
-                if(head != nullptr){
-                    key->next = head;
-                    head = key;
-                }
-                else{
-                    head = key;
-                    tail = head;
-                }
-                _size++;
-            } else {
-                key->ptr = value;
-                key->next = nullptr;
-                if (head != nullptr) {
-                    tail->next = key;
-                    tail = key;
-                } else {
-                    head = key;
-                    tail = head;
-                }
-                _size++;
+    transaction::exec_tx(pop, [this, &key, &value, insertToFront] {
+        if (insertToFront){
+            key->ptr = value;
+            key->next = nullptr;
+            if(head != nullptr){
+                key->next = head;
+                head = key;
             }
-        });
-    } catch (std::exception &e) {
-        log() << "KVMapper: " << e.what();
-    }
+            else{
+                head = key;
+                tail = head;
+            }
+            _size++;
+        } else {
+            key->ptr = value;
+            key->next = nullptr;
+            if (head != nullptr) {
+                tail->next = key;
+                tail = key;
+            } else {
+                head = key;
+                tail = head;
+            }
+            _size++;
+        }
+    });
 }
 
 int64_t PmseListIntPtr::deleteKV(uint64_t key,

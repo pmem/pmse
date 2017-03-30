@@ -107,28 +107,30 @@ public:
     }
 
     bool insertKV(persistent_ptr<KVPair> &id, persistent_ptr<T> value) { //internal use
-        if (!hasId(id->idValue)) {
+        try {
             _list[id->idValue % _size]->insertKV(id, value);
-        } else {
+        } catch (std::exception &e) {
+            std::cout << "KVMapper: " << e.what() << std::endl;
             return false;
         }
         return true; //correctly added
     }
 
     bool insertToFrontKV(persistent_ptr<KVPair> &id, persistent_ptr<T> value) { //internal use
-        if (!hasId(id->idValue)) {
-                _list[id->idValue % _size]->insertKV(id, value, true);
-            } else {
-                return false;
-            }
-            return true; //correctly added
+        try {
+            _list[id->idValue % _size]->insertKV(id, value, true);
+        } catch (std::exception &e) {
+            std::cout << "KVMapper: " << e.what() << std::endl;
+            return false;
         }
+        return true; //correctly added
+    }
 
     bool updateKV(uint64_t id, persistent_ptr<T> value, OperationContext* txn = nullptr) {
-        persistent_ptr<T> temp;
-        if (find(id, temp)) {
+        try {
             _list[id % _size]->update(id, value, txn);
-        } else {
+        } catch (std::exception &e) {
+            std::cout << "KVMapper: " << e.what() << std::endl;
             return false;
         }
         return true;
