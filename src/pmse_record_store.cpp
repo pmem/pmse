@@ -193,7 +193,7 @@ void PmseRecordStore::setCappedCallback(CappedCallback* cb) {
     _cappedCallback = cb;
 }
 
-void PmseRecordStore::temp_cappedTruncateAfter(OperationContext* txn, RecordId end,
+void PmseRecordStore::cappedTruncateAfter(OperationContext* txn, RecordId end,
                                                bool inclusive) {
     PmseRecordCursor cursor(_mapper, true);
     auto rec = cursor.seekExact(end);
