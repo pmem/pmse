@@ -35,6 +35,7 @@
 #include "pmse_index_cursor.h"
 
 #include "mongo/util/log.h"
+#include <shared_mutex>
 
 namespace mongo {
 
@@ -115,7 +116,7 @@ persistent_ptr<PmseTreeNode> PmseCursor::find_leaf(
 void PmseCursor::setEndPosition(const BSONObj& key, bool inclusive) {
     uint64_t i;
     int cmp;
-
+    std::shared_lock<nvml::obj::shared_mutex> lock(_tree->pmutex);
     if (!_tree->root) {
         return;
     }
@@ -309,7 +310,7 @@ void PmseCursor::setEndPosition(const BSONObj& key, bool inclusive) {
 boost::optional<IndexKeyEntry> PmseCursor::next(
                 RequestedInfo parts = kKeyAndLoc) {
     boost::optional<IndexKeyEntry> entry;
-    std::lock_guard<nvml::obj::mutex> lock(_tree->pmutex);
+    std::shared_lock<nvml::obj::shared_mutex> lock(_tree->pmutex);
     /**
      * Find next correct value for cursor
      */
@@ -578,7 +579,7 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(
                 const BSONObj& key, bool inclusive, RequestedInfo parts =
                                 kKeyAndLoc) {
     boost::optional<IndexKeyEntry> entry;
-    std::lock_guard<nvml::obj::mutex> lock(_tree->pmutex);
+    std::shared_lock<nvml::obj::shared_mutex> lock(_tree->pmutex);
     const auto discriminator = inclusive ? KeyString::kInclusive : KeyString::kExclusiveBefore;
     /**
      * Remember current search result to return it
@@ -833,7 +834,7 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(
                 const IndexSeekPoint& seekPoint,
                 RequestedInfo parts = kKeyAndLoc) {
     boost::optional<IndexKeyEntry> entry;
-    std::lock_guard<nvml::obj::mutex> lock(_tree->pmutex);
+    std::shared_lock<nvml::obj::shared_mutex> lock(_tree->pmutex);
 
     BSONObj key = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
     auto discriminator = KeyString::kInclusive;

@@ -44,7 +44,7 @@
 #include <libpmemobj++/pext.hpp>
 #include <libpmemobj++/pool.hpp>
 #include "libpmemobj++/transaction.hpp"
-#include "libpmemobj++/mutex.hpp"
+#include "libpmemobj++/shared_mutex.hpp"
 
 using namespace nvml::obj;
 
@@ -186,7 +186,7 @@ private:
     persistent_ptr<PmseTreeNode> first;
     persistent_ptr<PmseTreeNode> last;
     BSONObj _ordering;
-    nvml::obj::mutex pmutex;
+    nvml::obj::shared_mutex pmutex;
 };
 
 }

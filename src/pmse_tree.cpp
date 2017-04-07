@@ -103,7 +103,7 @@ bool PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
     uint64_t recordIndex;
     uint64_t i;
     int64_t cmp;
-    std::lock_guard<nvml::obj::mutex> lock(pmutex);
+    std::unique_lock<nvml::obj::shared_mutex> lock(pmutex);
     _ordering = ordering;
     //find node with key
     node = locateLeafWithKey(root, key, _ordering);
@@ -1005,7 +1005,7 @@ Status PmseTree::insert(pool_base pop, BSONObj_PM& key, const RecordId& loc,
     Status status = Status::OK();
     uint64_t i;
     int64_t cmp;
-    std::lock_guard<nvml::obj::mutex> lock(pmutex);
+    std::unique_lock<nvml::obj::shared_mutex> lock(pmutex);
 
     if (!root)   //root not allocated yet
     {
