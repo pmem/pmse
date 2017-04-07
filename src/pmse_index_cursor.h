@@ -91,8 +91,8 @@ private:
      */
     CursorObject _cursor;
     CursorObject _returnValue;
-    BSONObj min;
-    BSONObj max;
+    static const BSONObj min;
+    static const BSONObj max;
     BSONObj_PM end_min_pm;
     BSONObj_PM end_max_pm;
 

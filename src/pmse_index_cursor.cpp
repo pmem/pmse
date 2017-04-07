@@ -44,6 +44,9 @@ enum BehaviorIfFieldIsEqual {
     greater = 'g',
 };
 
+const BSONObj PmseCursor::min = BSON("" << -std::numeric_limits<double>::infinity());
+const BSONObj PmseCursor::max = BSON("" << std::numeric_limits<double>::infinity());
+
 PmseCursor::PmseCursor(OperationContext* txn, bool isForward,
                        persistent_ptr<PmseTree> tree, const BSONObj& ordering,
                        const bool unique) :
@@ -53,21 +56,11 @@ PmseCursor::PmseCursor(OperationContext* txn, bool isForward,
                                 _last(tree->last),
                                 _unique(unique),
                                 _tree(tree),
-                                _inf(0) {
-    cursorType = EOO;
-
-    _endPosition = 0;
-    _wasMoved = false;
-    _eofRestore = false;
-
-    BSONObjBuilder minBob;
-    minBob.append("", -std::numeric_limits<double>::infinity());
-    min = minBob.obj();
-
-    BSONObjBuilder maxBob;
-    maxBob.append("", std::numeric_limits<double>::infinity());
-    max = maxBob.obj();
-}
+                                cursorType(EOO),
+                                _endPosition(0),
+                                _inf(0),
+                                _wasMoved(false),
+                                _eofRestore(false){}
 
 /*
  * Find leaf which may contain key that we are looking for
