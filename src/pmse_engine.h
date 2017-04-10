@@ -30,20 +30,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_ENGINE_H_
-#define SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_ENGINE_H_
-
-#include <iostream>
-#include <list>
-#include <map>
-#include <memory>
-#include <string>
-#include <unordered_set>
-
-#include "mongo/db/storage/kv/kv_engine.h"
-
-#include "pmse_list.h"
-#include "pmse_recovery_unit.h"
+#ifndef SRC_PMSE_ENGINE_H_
+#define SRC_PMSE_ENGINE_H_
 
 #include <libpmemobj.h>
 #include <libpmemobj++/mutex.hpp>
@@ -53,6 +41,19 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
+
+#include <iostream>
+#include <list>
+#include <map>
+#include <memory>
+#include <string>
+#include <unordered_set>
+#include <vector>
+
+#include "pmse_list.h"
+#include "pmse_recovery_unit.h"
+
+#include "mongo/db/storage/kv/kv_engine.h"
 
 namespace mongo {
 
@@ -66,8 +67,8 @@ struct ident_entry {
 };
 
 class PmseEngine : public KVEngine {
-public:
-    PmseEngine(std::string dbpath);
+ public:
+    explicit PmseEngine(std::string dbpath);
 
     virtual ~PmseEngine();
 
@@ -120,7 +121,7 @@ public:
     }
 
     virtual int64_t getIdentSize(OperationContext* opCtx, StringData ident) {
-        // TODO: Implement getIdentSize
+        // TODO(kfilipek): Implement getIdentSize
         return 1;
     }
 
@@ -129,27 +130,27 @@ public:
     }
 
     virtual bool hasIdent(OperationContext* opCtx, StringData ident) const {
-        return identList->hasKey(ident.toString().c_str());
+        return _identList->hasKey(ident.toString().c_str());
     }
 
     std::vector<std::string> getAllIdents(OperationContext* opCtx) const {
-        return identList->getKeys();
+        return _identList->getKeys();
     }
 
-    virtual void cleanShutdown() {};
+    virtual void cleanShutdown() {}
 
     void setJournalListener(JournalListener* jl) final {}
 
-private:
-    std::mutex _pmutex;
-    std::map<std::string, pool_base> _pool_handler;
+ private:
+    stdx::mutex _pmutex;
+    std::map<std::string, pool_base> _poolHandler;
     std::shared_ptr<void> _catalogInfo;
-    const std::string _DBPATH;
+    const std::string _dbPath;
     PMEMobjpool *pm_pool = NULL;
-    const StringData _IDENT_FILENAME = "pmkv.pm";
+    const StringData _kIdentFilename = "pmkv.pm";
     pool<PmseList> pop;
-    persistent_ptr<PmseList> identList;
+    persistent_ptr<PmseList> _identList;
 };
-}
+}  // namespace mongo
 
-#endif /* SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_ENGINE_H_ */
+#endif  // SRC_PMSE_ENGINE_H_

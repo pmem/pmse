@@ -32,19 +32,14 @@
 
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
 
-#include "pmse_record_store.h"
 #include "pmse_change.h"
+#include "pmse_record_store.h"
 
-#include "errno.h"
-
-#include <cstdlib>
-#include <mutex>
-
-#include <libpmemobj++/mutex.hpp>
-#include <libpmemobj++/transaction.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/system/error_code.hpp>
+#include <libpmemobj++/mutex.hpp>
+#include <libpmemobj++/transaction.hpp>
 
 #include <cstdlib>
 #include <map>
@@ -64,59 +59,60 @@ PmseRecordStore::PmseRecordStore(StringData ns,
                                  StringData ident,
                                  const CollectionOptions& options,
                                  StringData dbpath,
-                                 std::map<std::string, pool_base> *pool_handler) :
-                RecordStore(ns), _cappedCallback(nullptr),
-                _options(options), _DBPATH(dbpath) {
+                                 std::map<std::string, pool_base> *pool_handler)
+    : RecordStore(ns), _cappedCallback(nullptr),
+      _options(options), _dbPath(dbpath) {
     log() << "ns: " << ns;
     if (pool_handler->count(ident.toString()) > 0) {
-        mapPool = pool<root>((*pool_handler)[ident.toString()]);
+        _mapPool = pool<root>((*pool_handler)[ident.toString()]);
     } else {
-        std::string filename = _DBPATH.toString() + ident.toString();
+        std::string filepath = _dbPath.toString() + ident.toString();
         boost::filesystem::path path;
-        log() << filename;
-        if (ns.toString() == "local.startup_log"
-                        && boost::filesystem::exists(filename)) {
+        log() << filepath;
+        if (ns.toString() == "local.startup_log" &&
+            boost::filesystem::exists(filepath)) {
             log() << "Delete old startup log";
-            boost::filesystem::remove_all(filename);
+            boost::filesystem::remove_all(filepath);
         }
 
-        std::string mapper_filename = _DBPATH.toString() + ident.toString();
+        std::string mapper_filename = _dbPath.toString() + ident.toString();
         if (!boost::filesystem::exists(mapper_filename.c_str())) {
             try {
-                mapPool = pool<root>::create(mapper_filename, "kvmapper",
-                                             (ns.toString() == "local.startup_log" ||
-                                                             ns.toString() == "_mdb_catalog" ? 10 : 80)
-                                                             * PMEMOBJ_MIN_POOL);
+                _mapPool = pool<root>::create(mapper_filename, "pmse_mapper",
+                                              (ns.toString() == "local.startup_log" ||
+                                               ns.toString() == "_mdb_catalog" ? 10 : 80)
+                                              * PMEMOBJ_MIN_POOL);
             } catch (std::exception &e) {
                 log() << "Error handled: " << e.what();
                 throw;
             }
         } else {
             try {
-                mapPool = pool<root>::open(mapper_filename, "kvmapper");
+                _mapPool = pool<root>::open(mapper_filename, "pmse_mapper");
             } catch (std::exception &e) {
                 log() << "Error handled: " << e.what();
                 throw;
             }
         }
         pool_handler->insert(std::pair<std::string, pool_base>(ident.toString(),
-                                                              mapPool));
+                                                               _mapPool));
     }
-    auto mapper_root = mapPool.get_root();
+    auto mapper_root = _mapPool.get_root();
 
     if (!mapper_root->kvmap_root_ptr) {
-        transaction::exec_tx(mapPool, [mapper_root, options] {
-            mapper_root->kvmap_root_ptr = make_persistent<PmseMap<InitData>>(options.capped, options.cappedMaxDocs,
+        transaction::exec_tx(_mapPool, [mapper_root, options] {
+            mapper_root->kvmap_root_ptr = make_persistent<PmseMap<InitData>>(options.capped,
+                                                                             options.cappedMaxDocs,
                                                                              options.cappedSize);
-            mapper_root->kvmap_root_ptr->initialize(true);
         });
+        mapper_root->kvmap_root_ptr->initialize(true);
     } else {
-        transaction::exec_tx(mapPool, [mapper_root] {
+        transaction::exec_tx(_mapPool, [mapper_root] {
             mapper_root->kvmap_root_ptr->initialize(false);
         });
     }
     try {
-        _mapper = mapPool.get_root()->kvmap_root_ptr;
+        _mapper = _mapPool.get_root()->kvmap_root_ptr;
     } catch (std::exception& e) {
         log() << "Error while creating PmseRecordStore";
     }
@@ -126,12 +122,13 @@ StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
                                                       const char* data, int len,
                                                       bool enforceQuota) {
     if (isCapped() && len > static_cast<int>(_mapper->getMax())) {
-        return StatusWith<RecordId>(ErrorCodes::BadValue, "object to insert exceeds cappedMaxSize");
+        return StatusWith<RecordId>(ErrorCodes::BadValue,
+                                    "object to insert exceeds cappedMaxSize");
     }
     persistent_ptr<InitData> obj;
     uint64_t id = 0;
     try {
-        transaction::exec_tx(mapPool, [&obj, len, data] {
+        transaction::exec_tx(_mapPool, [&obj, len, data] {
             obj = pmemobj_tx_alloc(sizeof(InitData::size) + len, 1);
             obj->size = len;
             memcpy(obj->data, data, len);
@@ -159,9 +156,9 @@ Status PmseRecordStore::updateRecord(OperationContext* txn, const RecordId& oldL
                                      const char* data, int len, bool enforceQuota,
                                      UpdateNotifier* notifier) {
     persistent_ptr<InitData> obj;
-    std::lock_guard<nvml::obj::mutex> lock(_mapper->_listMutex[oldLocation.repr() % _mapper->getHashmapSize()]);
+    stdx::lock_guard<nvml::obj::mutex> lock(_mapper->_listMutex[oldLocation.repr() % _mapper->getHashmapSize()]);
     try {
-        transaction::exec_tx(mapPool, [&obj, len, data, txn, oldLocation, this] {
+        transaction::exec_tx(_mapPool, [&obj, len, data, txn, oldLocation, this] {
             obj = pmemobj_tx_alloc(sizeof(InitData::size) + len, 1);
             obj->size = len;
             memcpy(obj->data, data, len);
@@ -180,10 +177,10 @@ Status PmseRecordStore::updateRecord(OperationContext* txn, const RecordId& oldL
 }
 
 void PmseRecordStore::deleteRecord(OperationContext* txn,
-                                      const RecordId& dl) {
-    std::lock_guard<nvml::obj::mutex> lock(_mapper->_listMutex[dl.repr() % _mapper->getHashmapSize()]);
+                                   const RecordId& dl) {
+    stdx::lock_guard<nvml::obj::mutex> lock(_mapper->_listMutex[dl.repr() % _mapper->getHashmapSize()]);
     persistent_ptr<KVPair> p;
-    if (_mapper->getPair(dl.repr(), p)) {
+    if (_mapper->getPair(dl.repr(), &p)) {
         _mapper->remove((uint64_t) dl.repr(), txn);
         _mapper->changeSize(-p->ptr->size);
     }
@@ -193,8 +190,8 @@ void PmseRecordStore::setCappedCallback(CappedCallback* cb) {
     _cappedCallback = cb;
 }
 
-void PmseRecordStore::temp_cappedTruncateAfter(OperationContext* txn, RecordId end,
-                                               bool inclusive) {
+void PmseRecordStore::cappedTruncateAfter(OperationContext* txn, RecordId end,
+                                          bool inclusive) {
     PmseRecordCursor cursor(_mapper, true);
     auto rec = cursor.seekExact(end);
     if (!inclusive)
@@ -211,9 +208,9 @@ void PmseRecordStore::temp_cappedTruncateAfter(OperationContext* txn, RecordId e
 }
 
 bool PmseRecordStore::findRecord(OperationContext* txn, const RecordId& loc,
-                                    RecordData* rd) const {
+                                 RecordData* rd) const {
     persistent_ptr<InitData> obj;
-    if (_mapper->find((uint64_t) loc.repr(), obj)) {
+    if (_mapper->find((uint64_t) loc.repr(), &obj)) {
         invariant(obj != nullptr);
         *rd = RecordData(obj->data, obj->size);
         return true;
@@ -234,9 +231,9 @@ void PmseRecordStore::deleteCappedAsNeeded(OperationContext* txn) {
 }
 
 Status PmseRecordStore::insertRecordsWithDocWriter(OperationContext* txn,
-                                          const DocWriter* const* docs,
-                                          size_t nDocs,
-                                          RecordId* idsOut) {
+                                                   const DocWriter* const* docs,
+                                                   size_t nDocs,
+                                                   RecordId* idsOut) {
     // TODO(kfilipek): Implement insertRecordsWithDocWriter
     log() << "Not implemented: insertRecordsWithDocWriter";
     return Status::OK();
@@ -248,7 +245,8 @@ void PmseRecordStore::waitForAllEarlierOplogWritesToBeVisible(OperationContext* 
 }
 
 PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper, bool forward)
-        : _forward(forward), _lastMoveWasRestore(false) {
+    : _forward(forward),
+      _lastMoveWasRestore(false) {
     _mapper = mapper;
     _before = nullptr;
     _cur = nullptr;
@@ -256,12 +254,12 @@ PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper, boo
 
 void PmseRecordCursor::moveToNext(bool inNext) {
     auto cursor = _cur;
-    auto listNumber = (actualListNumber == -1 ? 0 : static_cast<int64_t>(actualListNumber));
+    auto listNumber = (_actualListNumber == -1 ? 0 : static_cast<int64_t>(_actualListNumber));
     if (listNumber != -1 && _lastMoveWasRestore) {  // Cursor points to wrong position
         _lastMoveWasRestore = false;
-        auto item = _mapper->getFirstPtr(actualListNumber);
+        auto item = _mapper->getFirstPtr(_actualListNumber);
         while (item != nullptr) {  // Try to find next element
-            if (item->position >= position) {
+            if (item->position >= _position) {
                 _cur = item;
                 break;
             }
@@ -307,10 +305,10 @@ void PmseRecordCursor::moveToNext(bool inNext) {
 
     if (inNext) {
         _cur = cursor;
-        actualListNumber = listNumber;
+        _actualListNumber = listNumber;
     }
     if (_cur != nullptr)
-        position = _cur->position;
+        _position = _cur->position;
     else
         _eof = true;
 }
@@ -363,7 +361,7 @@ boost::optional<Record> PmseRecordCursor::next() {
         _eof = true;
         return boost::none;
     }
-    position = _cur->position;
+    _position = _cur->position;
     RecordId a((int64_t) _cur->idValue);
     RecordData b(_cur->ptr->data, _cur->ptr->size);
     return {{a, b}};
@@ -371,7 +369,7 @@ boost::optional<Record> PmseRecordCursor::next() {
 
 boost::optional<Record> PmseRecordCursor::seekExact(const RecordId& id) {
     persistent_ptr<InitData> obj = nullptr;
-    bool status = _mapper->getPair(id.repr(), _cur);
+    bool status = _mapper->getPair(id.repr(), &_cur);
     if (_cur == nullptr || _cur->ptr == nullptr) {
         return boost::none;
     }
@@ -379,7 +377,7 @@ boost::optional<Record> PmseRecordCursor::seekExact(const RecordId& id) {
     if (!status || !obj) {
         return boost::none;
     }
-    position = _cur->position;
+    _position = _cur->position;
     RecordId a(id.repr());
     RecordData b(obj->data, obj->size);
     return {{a, b}};
@@ -418,7 +416,7 @@ void PmseRecordCursor::moveToLast() {
         }
     } else {
         int64_t lastNonEmpty = -1;
-        int64_t scope = (actualListNumber < 0 ? _mapper->_size : static_cast<int64_t>(actualListNumber));
+        int64_t scope = (_actualListNumber < 0 ? _mapper->_size : static_cast<int64_t>(_actualListNumber));
         for (int64_t i = 0; i < scope; ++i) {
             if (_mapper->_list[i]->size())
                 lastNonEmpty = i;
@@ -426,7 +424,7 @@ void PmseRecordCursor::moveToLast() {
         if (lastNonEmpty == -1) {
             _eof = true;
             _cur = nullptr;
-            actualListNumber = -1;
+            _actualListNumber = -1;
             return;
         }
         _cur = _mapper->getFirstPtr(lastNonEmpty);
@@ -435,7 +433,7 @@ void PmseRecordCursor::moveToLast() {
                 _cur = _cur->next;
             }
         }
-        actualListNumber = lastNonEmpty;
+        _actualListNumber = lastNonEmpty;
     }
 }
 
@@ -451,8 +449,8 @@ void PmseRecordCursor::moveBackward() {
                 }
             }
         } else {
-            if (_cur == _mapper->getFirstPtr(actualListNumber)) {
-                if (actualListNumber <= 0) {
+            if (_cur == _mapper->getFirstPtr(_actualListNumber)) {
+                if (_actualListNumber <= 0) {
                     _before = nullptr;
                     _eof = true;
                 } else {
@@ -460,7 +458,7 @@ void PmseRecordCursor::moveBackward() {
                     _before = _cur;
                 }
             } else {
-                auto temp = _mapper->getFirstPtr(actualListNumber);
+                auto temp = _mapper->getFirstPtr(_actualListNumber);
                 _before = nullptr;
                 if (temp && !_forward) {
                     while (temp->next && temp != _cur) {
@@ -480,7 +478,7 @@ void PmseRecordCursor::moveBackward() {
 }
 
 bool PmseRecordCursor::checkPosition() {
-        if (_cur != nullptr && _cur->position != position) {  // Can come back to list, but with another pos
+        if (_cur != nullptr && _cur->position != _position) {  // Can come back to list, but with another pos
             return false;
         }
         return true;

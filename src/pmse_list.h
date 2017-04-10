@@ -38,10 +38,8 @@
  */
 
 
-#ifndef SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_LIST_H_
-#define SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_LIST_H_
-
-#include <vector>
+#ifndef SRC_PMSE_LIST_H_
+#define SRC_PMSE_LIST_H_
 
 #include <libpmemobj.h>
 #include <libpmemobj++/make_persistent.hpp>
@@ -51,7 +49,8 @@
 #include <libpmemobj++/pext.hpp>
 #include <libpmemobj++/transaction.hpp>
 
-#include <mutex>
+#include <string>
+#include <vector>
 
 using namespace nvml::obj;
 
@@ -63,14 +62,15 @@ struct _values {
 };
 
 class PmseList {
-public:
+ public:
     struct _pair {
         p<struct _values> kv;
         persistent_ptr<_pair> next;
     };
     typedef struct _pair KVPair;
-    PmseList(pool<PmseList> obj) : pool_obj(obj) {}
-    ~PmseList() {};
+    explicit PmseList(pool<PmseList> obj) : pool_obj(obj) {}
+    PmseList() = delete;
+    ~PmseList() = default;
     void insertKV(const char key[], const  char value[]);
     void deleteKV(const char key[]);
     void update(const char key[], const char value[]);
@@ -79,14 +79,13 @@ public:
     const char* find(const char key[], bool &status);
     void clear();
     void setPool(pool<PmseList> pool_obj);
-private:
+ private:
     persistent_ptr<KVPair> head;
     persistent_ptr<KVPair> tail;
     p<uint64_t> counter;
     pool<PmseList> pool_obj;
     nvml::obj::mutex _pmutex;
-    PmseList() {}
 };
 
-}
-#endif /* SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_LIST_H_ */
+}  // namespace mongo
+#endif  // SRC_PMSE_LIST_H_

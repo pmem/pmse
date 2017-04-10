@@ -32,37 +32,37 @@
 
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
 
-#include "mongo/db/storage/recovery_unit.h"
+#include <libpmemobj++/transaction.hpp>
+
 #include "mongo/db/operation_context.h"
+#include "mongo/db/storage/recovery_unit.h"
 #include "mongo/util/log.h"
 
 #include "pmse_change.h"
 #include "pmse_map.h"
 
-#include <libpmemobj++/transaction.hpp>
-
-#include <inttypes.h>
-
 namespace mongo {
 
-TruncateChange::TruncateChange(pool_base pop, PmseMap<InitData> *mapper, RecordId Id, InitData *data, uint64_t dataSize)
+TruncateChange::TruncateChange(pool_base pop, PmseMap<InitData> *mapper,
+                               RecordId Id, InitData *data, uint64_t dataSize)
         : _mapper(mapper), _Id(Id), _pop(pop), _dataSize(dataSize) {
-    _cachedData = (InitData*)malloc(sizeof(InitData) + data->size);
+    _cachedData = reinterpret_cast<InitData*>(malloc(sizeof(InitData) + data->size));
     memcpy(_cachedData->data, data->data, data->size);
     _cachedData->size = data->size;
 }
+
 void TruncateChange::commit() {}
-void TruncateChange::rollback()
-{
+
+void TruncateChange::rollback() {
     persistent_ptr<InitData> obj;
     persistent_ptr<KVPair> temp = nullptr;
     try {
-       transaction::exec_tx(_pop, [&] {
+       transaction::exec_tx(_pop, [this, &obj, &temp] {
            obj = pmemobj_tx_alloc(sizeof(InitData::size) + _cachedData->size, 1);
            obj->size = _cachedData->size;
            memcpy(obj->data, _cachedData->data, _cachedData->size);
            temp = make_persistent<KVPair>();
-           temp->idValue = (uint64_t) _Id.repr();
+           temp->idValue = static_cast<uint64_t>(_Id.repr());
        });
     } catch (std::exception &e) {
        log() << e.what();
@@ -71,24 +71,23 @@ void TruncateChange::rollback()
     _mapper->changeSize(_dataSize);
 }
 
-DropListChange::DropListChange(pool_base pop, persistent_ptr<persistent_ptr<PmseListIntPtr>[]> list, int ID)
-        : _pop(pop), _list(list), _ID(ID) {
+DropListChange::DropListChange(pool_base pop, persistent_ptr<persistent_ptr<PmseListIntPtr>[]> list, int id)
+        : _pop(pop), _list(list), _id(id) {}
 
-}
 void DropListChange::commit() {}
-void DropListChange::rollback()
-{
-    if(_list[_ID] == nullptr){
-        transaction::exec_tx(_pop, [&] {
-            _list[_ID] = make_persistent<PmseListIntPtr>();
-            _list[_ID]->setPool();
+
+void DropListChange::rollback() {
+    if (_list[_id] == nullptr) {
+        transaction::exec_tx(_pop, [this] {
+            _list[_id] = make_persistent<PmseListIntPtr>();
+            _list[_id]->setPool();
         });
     }
 }
 
 InsertChange::InsertChange(persistent_ptr<PmseMap<InitData>> mapper,
                            RecordId loc, uint64_t dataSize)
-        : _mapper(mapper), _loc(loc), _dataSize(dataSize) {}
+    : _mapper(mapper), _loc(loc), _dataSize(dataSize) {}
 
 void InsertChange::commit() {}
 
@@ -98,8 +97,8 @@ void InsertChange::rollback() {
 }
 
 RemoveChange::RemoveChange(pool_base pop, InitData* data, uint64_t dataSize)
-        : _pop(pop), _dataSize(dataSize) {
-    _cachedData = (InitData*)malloc(sizeof(InitData) + data->size);
+    : _pop(pop), _dataSize(dataSize) {
+    _cachedData = reinterpret_cast<InitData*>(malloc(sizeof(InitData) + data->size));
     memcpy(_cachedData->data, data->data, data->size);
     _cachedData->size = data->size;
 }
@@ -109,10 +108,9 @@ RemoveChange::~RemoveChange() {
 void RemoveChange::commit() {}
 void RemoveChange::rollback() {
     persistent_ptr<InitData> obj;
-    uint64_t id = 0;
     _mapper = pool<root>(_pop).get_root()->kvmap_root_ptr;
     try {
-        transaction::exec_tx(_pop, [&] {
+        transaction::exec_tx(_pop, [this, &obj] {
             obj = pmemobj_tx_alloc(sizeof(InitData::size) + _cachedData->size, 1);
             obj->size = _cachedData->size;
             memcpy(obj->data, _cachedData->data, _cachedData->size);
@@ -120,13 +118,13 @@ void RemoveChange::rollback() {
     } catch (std::exception &e) {
         log() << e.what();
     }
-    id = _mapper->insert(obj);
+    _mapper->insert(obj);
     _mapper->changeSize(_dataSize);
 }
 
 UpdateChange::UpdateChange(pool_base pop, uint64_t key, InitData* data, uint64_t dataSize)
         : _pop(pop), _key(key), _dataSize(dataSize) {
-    _cachedData = (InitData*)malloc(sizeof(InitData) + data->size);
+    _cachedData = reinterpret_cast<InitData*>(malloc(sizeof(InitData) + data->size));
     memcpy(_cachedData->data, data->data, data->size);
     _cachedData->size = data->size;
 }
@@ -136,15 +134,14 @@ UpdateChange::~UpdateChange() {
 void UpdateChange::commit() {}
 void UpdateChange::rollback() {
     persistent_ptr<InitData> obj;
-    uint64_t id = 0;
     try {
         _mapper = pool<root>(_pop).get_root()->kvmap_root_ptr;
-        transaction::exec_tx(_pop, [&] {
+        transaction::exec_tx(_pop, [this, &obj] {
             obj = pmemobj_tx_alloc(sizeof(InitData::size) + _cachedData->size, 1);
             obj->size = _cachedData->size;
             memcpy(obj->data, _cachedData->data, _cachedData->size);
         });
-        id = _mapper->updateKV(_key, obj);
+        _mapper->updateKV(_key, obj);
         auto rd = RecordData(obj->data, obj->size);
         _mapper->changeSize(rd.size() - _dataSize);
     } catch (std::exception &e) {
@@ -157,19 +154,21 @@ InsertIndexChange::InsertIndexChange(persistent_ptr<PmseTree> tree,
                                      const IndexDescriptor* desc)
         : _tree(tree), _pop(pop), _key(key), _loc(loc),
           _dupsAllowed(dupsAllowed), _desc(desc) {}
+
 void InsertIndexChange::commit() {}
+
 void InsertIndexChange::rollback() {
     try {
-        transaction::exec_tx(_pop,[&] {
-            _tree->remove(_pop, _key, _loc, _dupsAllowed,_desc->keyPattern(), nullptr);
-            --(_tree->_records);
+        transaction::exec_tx(_pop, [this] {
+            _tree->remove(_pop, _key, _loc, _dupsAllowed, _desc->keyPattern(), nullptr);
+            --_tree->_records;
         });
     } catch (std::exception &e) {
         log() << e.what();
     }
 }
 
-RemoveIndexChange::RemoveIndexChange(pool_base pop, BSONObj key,RecordId loc,
+RemoveIndexChange::RemoveIndexChange(pool_base pop, BSONObj key, RecordId loc,
                                      bool dupsAllowed, BSONObj ordering)
         : _pop(pop), _key(key), _loc(loc),
           _dupsAllowed(dupsAllowed), _ordering(ordering) {}
@@ -178,16 +177,14 @@ void RemoveIndexChange::rollback() {
     persistent_ptr<char> obj;
     Status status = Status::OK();
     BSONObj_PM bsonPM;
-
     try {
         _tree = pool<PmseTree>(_pop).get_root();
-        transaction::exec_tx(_pop,[&] {
+        transaction::exec_tx(_pop, [this, &obj, &status, &bsonPM] {
             obj = pmemobj_tx_alloc(_key.objsize(), 1);
-            memcpy( (void*)obj.get(), _key.objdata(), _key.objsize());
+            memcpy(reinterpret_cast<void*>(obj.get()), _key.objdata(), _key.objsize());
             bsonPM.data = obj;
             status = _tree->insert(_pop, bsonPM, _loc, _ordering, _dupsAllowed);
-            if(status == Status::OK())
-            {
+            if (status == Status::OK()) {
                 ++_tree->_records;
             }
         });
@@ -196,4 +193,4 @@ void RemoveIndexChange::rollback() {
     }
 }
 
-}
+}  // namespace mongo

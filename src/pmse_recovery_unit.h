@@ -30,35 +30,42 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_RECOVERY_UNIT_H_
-#define SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_RECOVERY_UNIT_H_
+#ifndef SRC_PMSE_RECOVERY_UNIT_H_
+#define SRC_PMSE_RECOVERY_UNIT_H_
+
+#include <vector>
 
 #include "mongo/db/storage/recovery_unit.h"
 
 namespace mongo {
 
 class PmseRecoveryUnit : public RecoveryUnit {
-public:
+ public:
     PmseRecoveryUnit() = default;
 
-    virtual void beginUnitOfWork(OperationContext* opCtx) {
-    };
+    virtual void beginUnitOfWork(OperationContext* opCtx);
+
     virtual void commitUnitOfWork();
+
     virtual void abortUnitOfWork();
-    virtual bool waitUntilDurable() {return true;};
-    virtual void abandonSnapshot() {};
-    virtual SnapshotId getSnapshotId() const {
-        return SnapshotId();};
-    virtual void registerChange(Change* change){
-        _changes.push_back(ChangePtr(change));
-    };
-    virtual void* writingPtr(void* data, size_t len) {return nullptr;};
-    virtual void setRollbackWritesDisabled() {};
-private:
+
+    virtual bool waitUntilDurable();
+
+    virtual void abandonSnapshot();
+
+    virtual SnapshotId getSnapshotId() const;
+
+    virtual void registerChange(Change* change);
+
+    virtual void* writingPtr(void* data, size_t len);
+
+    virtual void setRollbackWritesDisabled();
+
+ private:
     typedef std::shared_ptr<Change> ChangePtr;
     typedef std::vector<ChangePtr> Changes;
     Changes _changes;
 };
 
-}
-#endif /* SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_RECOVERY_UNIT_H_ */
+}  // namespace mongo
+#endif  // SRC_PMSE_RECOVERY_UNIT_H_

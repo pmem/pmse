@@ -29,6 +29,10 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+#ifndef SRC_PMSE_INDEX_CURSOR_H_
+#define SRC_PMSE_INDEX_CURSOR_H_
+
 #include "mongo/db/storage/sorted_data_interface.h"
 #include "mongo/db/storage/key_string.h"
 
@@ -39,19 +43,26 @@
 using namespace nvml::obj;
 
 namespace mongo {
+
 class PmseCursor final : public SortedDataInterface::Cursor {
-public:
+ public:
     PmseCursor(OperationContext* txn, bool isForward,
                persistent_ptr<PmseTree> tree, const BSONObj& ordering,
                const bool unique);
+
     void setEndPosition(const BSONObj& key, bool inclusive);
+
     virtual boost::optional<IndexKeyEntry> next(RequestedInfo parts);
+
     boost::optional<IndexKeyEntry> seek(const BSONObj& key, bool inclusive,
                                         RequestedInfo parts);
+
     boost::optional<IndexKeyEntry> seek(const IndexSeekPoint& seekPoint,
                                         RequestedInfo parts);
+
     boost::optional<IndexKeyEntry> seekExact(const BSONObj& key,
                                              RequestedInfo parts);
+
     void save();
 
     void saveUnpositioned();
@@ -62,10 +73,13 @@ public:
 
     void reattachToOperationContext(OperationContext* opCtx);
 
-private:
+ private:
     virtual boost::optional<IndexKeyEntry> iterateToNext(RequestedInfo parts);
-    boost::optional<IndexKeyEntry> seekInTree(const BSONObj& key, KeyString::Discriminator discriminator,
-                                        RequestedInfo parts);
+
+    boost::optional<IndexKeyEntry> seekInTree(const BSONObj& key,
+                                              KeyString::Discriminator discriminator,
+                                              RequestedInfo parts);
+
     persistent_ptr<PmseTreeNode> find_leaf(persistent_ptr<PmseTreeNode> node,
                                            const BSONObj& key,
                                            const BSONObj& _ordering);
@@ -101,7 +115,8 @@ private:
 
     bool _wasMoved;
     bool _eofRestore;
-    bool _wasRestore=false;
-
+    bool _wasRestore = false;
 };
-}
+}  // namespace mongo
+
+#endif  // SRC_PMSE_INDEX_CURSOR_H_
