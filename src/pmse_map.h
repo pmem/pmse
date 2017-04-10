@@ -37,11 +37,12 @@
  *      Author: kfilipek
  */
 
-#ifndef SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_MAP_H_
-#define SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_MAP_H_
+#ifndef SRC_PMSE_MAP_H_
+#define SRC_PMSE_MAP_H_
 
 #include "pmse_list_int_ptr.h"
 #include "pmse_change.h"
+
 #include <libpmemobj++/p.hpp>
 #include <libpmemobj++/pext.hpp>
 #include <libpmemobj++/pool.hpp>
@@ -50,24 +51,24 @@
 #include <libpmemobj++/mutex.hpp>
 #include <libpmemobj++/detail/pexceptions.hpp>
 
-#include <mutex>
-
-using namespace nvml::obj;
+#include <limits>
 
 namespace mongo {
 
 const uint64_t CAPPED_SIZE = 1;
 const uint64_t HASHMAP_SIZE = 1000;
+
 class PmseRecordCursor;
 
 template<typename T>
 class PmseMap {
     friend PmseRecordCursor;
-public:
+
+ public:
     PmseMap() = default;
 
     PmseMap(bool isCapped, uint64_t maxDoc, uint64_t sizeOfColl, uint64_t size = HASHMAP_SIZE)
-            : _size(isCapped ? CAPPED_SIZE : size), _isCapped(isCapped) {
+        : _size(isCapped ? CAPPED_SIZE : size), _isCapped(isCapped) {
         _maxDocuments = maxDoc;
         _sizeOfCollection = sizeOfColl;
         try {
@@ -81,7 +82,7 @@ public:
 
     uint64_t insert(persistent_ptr<T> value) {
         auto id = getNextId();
-        std::lock_guard<nvml::obj::mutex> lock(_listMutex[id->idValue % _size]);
+        stdx::lock_guard<nvml::obj::mutex> lock(_listMutex[id->idValue % _size]);
         if (!insertKV(id, value)) {
             return -1;
         }
@@ -90,40 +91,40 @@ public:
     }
 
     uint64_t getCappedFirstId() {
-        if(isCapped())
+        if (isCapped())
             return getFirstPtr(0)->idValue;
         return 0;
     }
 
     bool removalIsNeeded() {
-        if(isCapped()) {
+        if (isCapped()) {
             if ((uint64_t)_dataSize > _sizeOfCollection) {
                 return true;
             }
-            if ((_maxDocuments != 0) && (_list[0]->_size > _maxDocuments)) //number of items exceed
+            if ((_maxDocuments != 0) && (_list[0]->_size > _maxDocuments))  // number of items exceed
                 return true;
         }
         return false;
     }
 
-    bool insertKV(persistent_ptr<KVPair> &id, persistent_ptr<T> value) { //internal use
+    bool insertKV(const persistent_ptr<KVPair> &id, persistent_ptr<T> value) {  // internal use
         try {
             _list[id->idValue % _size]->insertKV(id, value);
         } catch (std::exception &e) {
             std::cout << "KVMapper: " << e.what() << std::endl;
             return false;
         }
-        return true; //correctly added
+        return true;  // correctly added
     }
 
-    bool insertToFrontKV(persistent_ptr<KVPair> &id, persistent_ptr<T> value) { //internal use
+    bool insertToFrontKV(const persistent_ptr<KVPair> &id, persistent_ptr<T> value) {  // internal use
         try {
             _list[id->idValue % _size]->insertKV(id, value, true);
         } catch (std::exception &e) {
             std::cout << "KVMapper: " << e.what() << std::endl;
             return false;
         }
-        return true; //correctly added
+        return true;  // correctly added
     }
 
     bool updateKV(uint64_t id, persistent_ptr<T> value, OperationContext* txn = nullptr) {
@@ -140,11 +141,11 @@ public:
         return _list[id % _size]->hasKey(id);
     }
 
-    bool find(uint64_t id, persistent_ptr<T> &value) {
+    bool find(uint64_t id, persistent_ptr<T> *value) {
         return _list[id % _size]->find(id, value);
     }
 
-    bool getPair(uint64_t id, persistent_ptr<KVPair> &value) {
+    bool getPair(uint64_t id, persistent_ptr<KVPair> *value) {
         return _list[id % _size]->getPair(id, value);
     }
 
@@ -158,10 +159,12 @@ public:
 
     void initialize(bool firstRun) {
         pop = pool_by_vptr(this);
-        for(int i = 0; i < _size; i++) {
+        for (int i = 0; i < _size; i++) {
             if (firstRun) {
                 try {
-                    _list[i] = make_persistent<PmseListIntPtr>();
+                    transaction::exec_tx(pop, [this, i] {
+                        _list[i] = make_persistent<PmseListIntPtr>();
+                    });
                 } catch(std::exception &e) {
                     std::cout << e.what() << std::endl;
                 }
@@ -171,11 +174,11 @@ public:
     }
 
     void deinitialize() {
-        //TODO: deallocate all resources
+        // TODO(kfilipek): deallocate all resources
     }
 
     uint64_t fillment() {
-        if(_isCapped)
+        if (_isCapped)
             return _list[0]->size();
         return _hashmapSize;
     }
@@ -183,13 +186,11 @@ public:
     bool truncate(OperationContext* txn) {
         bool status = true;
         try {
-            transaction::exec_tx(pop, [&] {
-                for(int i = 0; i < _size; i++) {
+            transaction::exec_tx(pop, [this, txn] {
+                for (int i = 0; i < _size; i++) {
                     _list[i]->clear(txn, this);
-
                     if (txn)
                         txn->recoveryUnit()->registerChange(new DropListChange(pop, _list, i));
-
                     delete_persistent<PmseListIntPtr>(_list[i]);
                     _list[i] = nullptr;
                 }
@@ -197,7 +198,6 @@ public:
             });
             _counter = 0;
             _hashmapSize = 0;
-            _counterCapped = 0;
             _dataSize = 0;
         } catch (nvml::transaction_alloc_error &e) {
             std::cout << e.what() << std::endl;
@@ -230,7 +230,7 @@ public:
     }
 
     void moveToDeleted(persistent_ptr<KVPair> &item, persistent_ptr<KVPair> &list) {
-        std::lock_guard<nvml::obj::mutex> guard(_pmutex);
+        stdx::lock_guard<nvml::obj::mutex> guard(_pmutex);
         if (list != nullptr) {
             item->next = list;
             list = item;
@@ -245,7 +245,8 @@ public:
     }
 
     nvml::obj::mutex _listMutex[HASHMAP_SIZE];
-private:
+
+ private:
     const int _size;
     const bool _isCapped;
     pool_base pop;
@@ -254,7 +255,6 @@ private:
     p<uint64_t> _hashmapSize = 0;
     p<uint64_t> _maxDocuments;
     p<uint64_t> _sizeOfCollection;
-    p<uint64_t> _counterCapped = 0;
     persistent_ptr<persistent_ptr<PmseListIntPtr>[]> _list;
 
     nvml::obj::mutex _pmutex;
@@ -267,13 +267,13 @@ private:
     }
 
     persistent_ptr<KVPair> getNextId() {
-            std::lock_guard<nvml::obj::mutex> guard(_pmutex);
+            stdx::lock_guard<nvml::obj::mutex> guard(_pmutex);
             persistent_ptr<KVPair> temp = nullptr;
-            if(_deleted == nullptr) {
-                if(_counter != std::numeric_limits<uint64_t>::max()-1) {
+            if (_deleted == nullptr) {
+                if (_counter != std::numeric_limits<uint64_t>::max()-1) {
                     this->_counter++;
                     try {
-                        transaction::exec_tx(pop, [&] {
+                        transaction::exec_tx(pop, [this, &temp] {
                             temp = make_persistent<KVPair>();
                             temp->idValue = _counter;
                         });
@@ -285,8 +285,6 @@ private:
                 }
             } else {
                 temp = _deleted;
-                uint64_t id = 0;
-                id = _deleted->idValue;
                 _deleted = _deleted->next;
                 return temp;
             }
@@ -297,5 +295,5 @@ private:
 struct root {
     persistent_ptr<PmseMap<InitData>> kvmap_root_ptr;
 };
-}
-#endif /* SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_MAP_H_ */
+}  // namespace mongo
+#endif  // SRC_PMSE_MAP_H_

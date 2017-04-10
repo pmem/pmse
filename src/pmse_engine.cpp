@@ -53,11 +53,11 @@ namespace mongo {
 PmseEngine::PmseEngine(std::string dbpath) : _DBPATH(dbpath) {
     std::string path = _DBPATH+_IDENT_FILENAME.toString();
     if (!boost::filesystem::exists(path)) {
-        pop = pool<PmseList>::create(path, "identList", 4*PMEMOBJ_MIN_POOL,
+        pop = pool<PmseList>::create(path, "pmse_identlist", 4 * PMEMOBJ_MIN_POOL,
                                          S_IRWXU);
         log() << "Engine pool created";
     } else {
-        pop = pool<PmseList>::open(path, "identList");
+        pop = pool<PmseList>::open(path, "pmse_identlist");
         log() << "Engine pool opened";
     }
 

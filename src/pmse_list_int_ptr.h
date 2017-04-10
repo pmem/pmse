@@ -48,10 +48,9 @@
 #include <libpmemobj++/transaction.hpp>
 #include <libpmemobj++/utils.hpp>
 
-#include "mongo/db/operation_context.h"
-
-#include <mutex>
 #include <vector>
+
+#include "mongo/db/operation_context.h"
 
 using namespace nvml::obj;
 
@@ -81,8 +80,8 @@ class PmseListIntPtr {
     ~PmseListIntPtr();
     void insertKV(const persistent_ptr<KVPair> &key,
                   const persistent_ptr<InitData> &value, bool insertToFront = false);
-    bool find(uint64_t key, persistent_ptr<InitData> &item_ptr);
-    bool getPair(uint64_t key, persistent_ptr<KVPair> &item_ptr);
+    bool find(uint64_t key, persistent_ptr<InitData> *item_ptr);
+    bool getPair(uint64_t key, persistent_ptr<KVPair> *item_ptr);
     void update(uint64_t key, const persistent_ptr<InitData> &value, OperationContext* txn);
     int64_t deleteKV(uint64_t key, persistent_ptr<KVPair> &deleted, OperationContext* txn);
     bool hasKey(uint64_t key);
@@ -98,19 +97,9 @@ class PmseListIntPtr {
     persistent_ptr<KVPair> head;
     persistent_ptr<KVPair> tail;
     persistent_ptr<KVPair> deleted;
-    persistent_ptr<KVPair> deletedTail;
-    p<uint64_t> counterDeleted;
-    p<uint64_t> counter;
+    p<uint64_t> _counter;
     p<uint64_t> _size;
     pool_base pop;
-
-    p<uint64_t> sizeOfFirstData;
-    enum FreeSpace {
-        NO = 0, YES = 1, BLOCKED = 2
-    };
-    FreeSpace isSpace = YES;
-    bool isFullCapped;
-    persistent_ptr<KVPair> first;
     p<uint64_t> actualSizeOfCollection = 0;
 };
 }  // namespace mongo

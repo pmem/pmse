@@ -50,7 +50,7 @@
 
 namespace mongo {
 
-PmseListIntPtr::PmseListIntPtr() : counter(1) {
+PmseListIntPtr::PmseListIntPtr() : _counter(1) {
     pop = pool_by_vptr(this);
 }
 
@@ -150,25 +150,25 @@ bool PmseListIntPtr::hasKey(uint64_t key) {
     return false;
 }
 
-bool PmseListIntPtr::find(uint64_t key, persistent_ptr<InitData> &item_ptr) {
+bool PmseListIntPtr::find(uint64_t key, persistent_ptr<InitData> *item_ptr) {
     for (auto rec = head; rec != nullptr; rec = rec->next) {
         if (rec->idValue == key) {
-            item_ptr = rec->ptr;
+            *item_ptr = rec->ptr;
             return true;
         }
     }
-    item_ptr = nullptr;
+    *item_ptr = nullptr;
     return false;
 }
 
-bool PmseListIntPtr::getPair(uint64_t key, persistent_ptr<KVPair> &item_ptr) {
+bool PmseListIntPtr::getPair(uint64_t key, persistent_ptr<KVPair> *item_ptr) {
     for (auto rec = head; rec != nullptr; rec = rec->next) {
         if (rec->idValue == key) {
-            item_ptr = rec;
+            *item_ptr = rec;
             return true;
         }
     }
-    item_ptr = nullptr;
+    *item_ptr = nullptr;
     return false;
 }
 
@@ -201,7 +201,7 @@ void PmseListIntPtr::clear(OperationContext* txn, PmseMap<InitData> *_mapper) {
         for (auto rec = head; rec != nullptr;) {
             if (txn)
                 txn->recoveryUnit()->registerChange(new TruncateChange(pop, _mapper, RecordId(rec->idValue),
-                                (rec->ptr).get(), rec->ptr->size));
+                                                                       rec->ptr.get(), rec->ptr->size));
             auto temp = rec->next;
             delete_persistent<KVPair>(rec);
             rec = temp;
@@ -212,7 +212,7 @@ void PmseListIntPtr::clear(OperationContext* txn, PmseMap<InitData> *_mapper) {
 }
 
 uint64_t PmseListIntPtr::getNextId() {
-    return counter++;
+    return _counter++;
 }
 
 }  // namespace mongo

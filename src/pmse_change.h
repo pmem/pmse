@@ -30,31 +30,28 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_CHANGE_H_
-#define SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_CHANGE_H_
+#ifndef SRC_PMSE_CHANGE_H_
+#define SRC_PMSE_CHANGE_H_
 
-#include "libpmem.h"
-#include "libpmemobj.h"
 #include <libpmemobj++/p.hpp>
 #include <libpmemobj++/persistent_ptr.hpp>
 
-#include "pmse_tree.h"
 #include "pmse_list_int_ptr.h"
+#include "pmse_tree.h"
 
-#include "mongo/db/record_id.h"
 #include "mongo/db/index/index_descriptor.h"
+#include "mongo/db/record_id.h"
 
 namespace mongo {
 template<typename T>
 class PmseMap;
 
-class TruncateChange: public RecoveryUnit::Change
-{
-public:
+class TruncateChange: public RecoveryUnit::Change {
+ public:
     TruncateChange(pool_base pop, PmseMap<InitData> *mapper, RecordId Id, InitData *data, uint64_t dataSize);
     virtual void rollback();
     virtual void commit();
-private:
+ private:
     PmseMap<InitData> *_mapper;
     RecordId _Id;
     InitData *_cachedData;
@@ -63,52 +60,48 @@ private:
     uint64_t _dataSize;
 };
 
-class DropListChange: public RecoveryUnit::Change
-{
-public:
+class DropListChange: public RecoveryUnit::Change {
+ public:
     DropListChange(pool_base pop, persistent_ptr<persistent_ptr<PmseListIntPtr>[]> list, int ID);
     virtual void rollback();
     virtual void commit();
-private:
+ private:
     pool_base _pop;
     persistent_ptr<persistent_ptr<PmseListIntPtr>[]> _list;
     int _ID;
 };
 
-class InsertChange : public RecoveryUnit::Change
-{
-public:
+class InsertChange : public RecoveryUnit::Change {
+ public:
     InsertChange(persistent_ptr<PmseMap<InitData>> mapper, RecordId loc, uint64_t dataSize);
     virtual void rollback();
     virtual void commit();
-private:
+ private:
     persistent_ptr<PmseMap<InitData>> _mapper;
     const RecordId _loc;
     uint64_t _dataSize;
 };
 
-class RemoveChange : public RecoveryUnit::Change
-{
-public:
+class RemoveChange : public RecoveryUnit::Change {
+ public:
     RemoveChange(pool_base pop, InitData* data, uint64_t dataSize);
     ~RemoveChange();
     virtual void rollback();
     virtual void commit();
-private:
+ private:
     pool_base _pop;
     InitData *_cachedData;
     uint64_t _dataSize;
     persistent_ptr<PmseMap<InitData>> _mapper;
 };
 
-class UpdateChange : public RecoveryUnit::Change
-{
-public:
+class UpdateChange : public RecoveryUnit::Change {
+ public:
     UpdateChange(pool_base pop, uint64_t key, InitData* data, uint64_t dataSize);
     ~UpdateChange();
     virtual void rollback();
     virtual void commit();
-private:
+ private:
     pool_base _pop;
     uint64_t _key;
     InitData *_cachedData;
@@ -117,13 +110,13 @@ private:
 };
 
 class InsertIndexChange : public RecoveryUnit::Change {
-public:
+ public:
     InsertIndexChange(persistent_ptr<PmseTree> tree, pool_base pop,
                       BSONObj key, RecordId loc, bool dupsAllowed,
                       const IndexDescriptor* desc);
     virtual void rollback();
     virtual void commit();
-private:
+ private:
     persistent_ptr<PmseTree> _tree;
     pool_base _pop;
     BSONObj _key;
@@ -133,12 +126,12 @@ private:
 };
 
 class RemoveIndexChange : public RecoveryUnit::Change {
-public:
-    RemoveIndexChange(pool_base pop, BSONObj key,RecordId loc,
+ public:
+    RemoveIndexChange(pool_base pop, BSONObj key, RecordId loc,
                       bool dupsAllowed, BSONObj ordering);
     virtual void rollback();
     virtual void commit();
-private:
+ private:
     pool_base _pop;
     BSONObj _key;
     RecordId _loc;
@@ -147,5 +140,5 @@ private:
     persistent_ptr<PmseTree> _tree;
 };
 
-}
-#endif /* SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_CHANGE_H_ */
+}  // namespace mongo
+#endif  // SRC_PMSE_CHANGE_H_
