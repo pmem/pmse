@@ -299,7 +299,7 @@ persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
             persistent_ptr<char> obj;
             transaction::exec_tx(pop, [&obj, n] {
                 obj = pmemobj_tx_alloc(n->keys[0].getBSON().objsize(), 1);
-                memcpy(reinterpret_cast<void*>(obj.get()),
+                memcpy(static_cast<void*>(obj.get()),
                        n->keys[0].getBSON().objdata(),
                        n->keys[0].getBSON().objsize());
             });
@@ -326,7 +326,7 @@ persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
             persistent_ptr<char> obj;
             transaction::exec_tx(pop, [&obj, neighbor] {
                 obj = pmemobj_tx_alloc(neighbor->keys[1].getBSON().objsize(), 1);
-                memcpy(reinterpret_cast<void*>(obj.get()),
+                memcpy(static_cast<void*>(obj.get()),
                        neighbor->keys[1].getBSON().objdata(),
                        neighbor->keys[1].getBSON().objsize());
             });
@@ -416,7 +416,7 @@ persistent_ptr<PmseTreeNode> PmseTree::coalesceNodes(
         BSONObj_PM bsonPM;
         persistent_ptr<char> obj;
         obj = pmemobj_tx_alloc(k_prime.getBSON().objsize(), 1);
-        memcpy(reinterpret_cast<void*>(obj.get()), k_prime.getBSON().objdata(),
+        memcpy(static_cast<void*>(obj.get()), k_prime.getBSON().objdata(),
                k_prime.getBSON().objsize());
 
         bsonPM.data = obj;
@@ -590,6 +590,7 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKey(
         return current;
 
     while (!current->is_leaf) {
+        i = 0;
         while (i < current->num_keys) {
             cmp = key.woCompare(current->keys[i].getBSON(), _ordering, false);
             if (cmp > 0) {
@@ -636,6 +637,7 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
         return current;
 
     while (!current->is_leaf) {
+        i = 0;
         while (i < current->num_keys) {
             cmp = key.getBSON().woCompare(current->keys[i].getBSON(), ordering,
                             false);
@@ -873,7 +875,7 @@ persistent_ptr<PmseTreeNode> PmseTree::insertIntoNodeParent(
 
     transaction::exec_tx(pop, [&obj, &key] {
         obj = pmemobj_tx_alloc(key.getBSON().objsize(), 1);
-        memcpy(reinterpret_cast<void*>(obj.get()), key.getBSON().objdata(), key.getBSON().objsize());
+        memcpy(static_cast<void*>(obj.get()), key.getBSON().objdata(), key.getBSON().objsize());
     });
     newKey.data = obj;
 

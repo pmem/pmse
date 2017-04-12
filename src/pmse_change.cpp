@@ -46,7 +46,7 @@ namespace mongo {
 TruncateChange::TruncateChange(pool_base pop, PmseMap<InitData> *mapper,
                                RecordId Id, InitData *data, uint64_t dataSize)
         : _mapper(mapper), _Id(Id), _pop(pop), _dataSize(dataSize) {
-    _cachedData = reinterpret_cast<InitData*>(malloc(sizeof(InitData) + data->size));
+    _cachedData = static_cast<InitData*>(malloc(sizeof(InitData) + data->size));
     memcpy(_cachedData->data, data->data, data->size);
     _cachedData->size = data->size;
 }
@@ -98,7 +98,7 @@ void InsertChange::rollback() {
 
 RemoveChange::RemoveChange(pool_base pop, InitData* data, uint64_t dataSize)
     : _pop(pop), _dataSize(dataSize) {
-    _cachedData = reinterpret_cast<InitData*>(malloc(sizeof(InitData) + data->size));
+    _cachedData = static_cast<InitData*>(malloc(sizeof(InitData) + data->size));
     memcpy(_cachedData->data, data->data, data->size);
     _cachedData->size = data->size;
 }
@@ -124,7 +124,7 @@ void RemoveChange::rollback() {
 
 UpdateChange::UpdateChange(pool_base pop, uint64_t key, InitData* data, uint64_t dataSize)
         : _pop(pop), _key(key), _dataSize(dataSize) {
-    _cachedData = reinterpret_cast<InitData*>(malloc(sizeof(InitData) + data->size));
+    _cachedData = static_cast<InitData*>(malloc(sizeof(InitData) + data->size));
     memcpy(_cachedData->data, data->data, data->size);
     _cachedData->size = data->size;
 }
@@ -181,7 +181,7 @@ void RemoveIndexChange::rollback() {
         _tree = pool<PmseTree>(_pop).get_root();
         transaction::exec_tx(_pop, [this, &obj, &status, &bsonPM] {
             obj = pmemobj_tx_alloc(_key.objsize(), 1);
-            memcpy(reinterpret_cast<void*>(obj.get()), _key.objdata(), _key.objsize());
+            memcpy(static_cast<void*>(obj.get()), _key.objdata(), _key.objsize());
             bsonPM.data = obj;
             status = _tree->insert(_pop, bsonPM, _loc, _ordering, _dupsAllowed);
             if (status == Status::OK()) {

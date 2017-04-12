@@ -99,7 +99,7 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
     try {
         transaction::exec_tx(_pm_pool, [&obj, &owned] {
             obj = pmemobj_tx_alloc(owned.objsize(), 1);
-            memcpy(reinterpret_cast<void*>(obj.get()), owned.objdata(), owned.objsize());
+            memcpy(static_cast<void*>(obj.get()), owned.objdata(), owned.objsize());
         });
 
         bsonPM.data = obj;
