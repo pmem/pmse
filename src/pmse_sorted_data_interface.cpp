@@ -32,14 +32,20 @@
 
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
 
-#include "pmse_sorted_data_interface.h"
-#include "pmse_index_cursor.h"
 #include "pmse_change.h"
+#include "pmse_index_cursor.h"
+#include "pmse_sorted_data_interface.h"
+
+#include <boost/filesystem.hpp>
+#include <boost/filesystem/operations.hpp>
+#include <boost/system/error_code.hpp>
+#include <libpmemobj++/mutex.hpp>
+
+#include <map>
+#include <string>
+#include <utility>
 
 #include "mongo/util/log.h"
-#include <libpmemobj++/mutex.hpp>
-#include <mutex>
-using std::string;
 
 namespace mongo {
 
@@ -48,25 +54,23 @@ const int TempKeyMaxSize = 1024;
 PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
                                                  const IndexDescriptor* desc,
                                                  StringData dbpath,
-                                                 std::map<std::string, pool_base> *pool_handler) {
-    _desc = desc;
+                                                 std::map<std::string, pool_base> *pool_handler)
+    : _dbpath(dbpath), _desc(desc) {
     try {
         if (pool_handler->count(ident.toString()) > 0) {
-            pm_pool = pool<PmseTree>((*pool_handler)[ident.toString()]);
+            _pm_pool = pool<PmseTree>((*pool_handler)[ident.toString()]);
         } else {
-            filepath = dbpath;
-            std::string filename = filepath.toString() + ident.toString();
-            _desc = desc;
-
-            if (access(filename.c_str(), F_OK) != 0) {
-                pm_pool = pool<PmseTree>::create(filename.c_str(), "pmse",
-                                                 10 * PMEMOBJ_MIN_POOL, 0666);
+            std::string filepath = _dbpath.toString() + ident.toString();
+            if (!boost::filesystem::exists(filepath)) {
+                _pm_pool = pool<PmseTree>::create(filepath.c_str(), "pmse_index",
+                                                  10 * PMEMOBJ_MIN_POOL, 0666);
             } else {
-                pm_pool = pool<PmseTree>::open(filename.c_str(), "pmse");
+                _pm_pool = pool<PmseTree>::open(filepath.c_str(), "pmse_index");
             }
-            pool_handler->insert(std::pair<std::string, pool_base>(ident.toString(), pm_pool));
+            pool_handler->insert(std::pair<std::string, pool_base>(ident.toString(),
+                                                                   _pm_pool));
         }
-        tree = pm_pool.get_root();
+        _tree = _pm_pool.get_root();
     } catch (std::exception &e) {
         log() << "Error handled: " << e.what();
         throw;
@@ -74,8 +78,8 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
 }
 
 /*
- * Insert new (Key,RecordID) into Sorted Index into correct place. Placement must be chosen basing on key value.
- *
+ * Insert new (Key,RecordID) into Sorted Index into correct place.
+ * Placement must be chosen basing on key value. *
  */
 Status PmseSortedDataInterface::insert(OperationContext* txn,
                                        const BSONObj& key, const RecordId& loc,
@@ -83,27 +87,26 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
     BSONObj_PM bsonPM;
     BSONObj owned = key.getOwned();
     Status status = Status::OK();
-
     persistent_ptr<char> obj;
+
     if (key.objsize() >= TempKeyMaxSize) {
-        string msg = mongoutils::str::stream()
+        std::string msg = mongoutils::str::stream()
             << "PMSE::insert: key too large to index, failing " << ' '
             << key.objsize() << ' ' << key;
         return Status(ErrorCodes::KeyTooLong, msg);
     }
 
     try {
-        transaction::exec_tx(pm_pool, [&] {
+        transaction::exec_tx(_pm_pool, [&obj, &owned] {
             obj = pmemobj_tx_alloc(owned.objsize(), 1);
-            memcpy( (void*)obj.get(), owned.objdata(), owned.objsize());
+            memcpy(static_cast<void*>(obj.get()), owned.objdata(), owned.objsize());
         });
 
         bsonPM.data = obj;
-        status = tree->insert(pm_pool, bsonPM, loc, _desc->keyPattern(), dupsAllowed);
-        if(status == Status::OK())
-        {
-            ++tree->_records;
-            txn->recoveryUnit()->registerChange(new InsertIndexChange(tree, pm_pool, key, loc, dupsAllowed, _desc));
+        status = _tree->insert(_pm_pool, bsonPM, loc, _desc->keyPattern(), dupsAllowed);
+        if (status == Status::OK()) {
+            ++_tree->_records;
+            txn->recoveryUnit()->registerChange(new InsertIndexChange(_tree, _pm_pool, key, loc, dupsAllowed, _desc));
         }
     } catch (std::exception &e) {
         log() << e.what();
@@ -118,50 +121,49 @@ void PmseSortedDataInterface::unindex(OperationContext* txn, const BSONObj& key,
                                       const RecordId& loc, bool dupsAllowed) {
     BSONObj owned = key.getOwned();
     try {
-        transaction::exec_tx(pm_pool, [&] {
-            if (tree->remove(pm_pool, owned, loc, dupsAllowed, _desc->keyPattern(), txn))
-                --tree->_records;
+        transaction::exec_tx(_pm_pool, [this, &owned, loc, dupsAllowed, txn] {
+            if (_tree->remove(_pm_pool, owned, loc, dupsAllowed,
+                             _desc->keyPattern(), txn))
+                --_tree->_records;
         });
-
     } catch (std::exception &e) {
         log() << e.what();
     }
-
 }
 
 Status PmseSortedDataInterface::dupKeyCheck(OperationContext* txn,
                                             const BSONObj& key,
                                             const RecordId& loc) {
     BSONObj owned = key.getOwned();
-    return tree->dupKeyCheck(pm_pool, owned, loc);
+    return _tree->dupKeyCheck(_pm_pool, owned, loc);
 }
 
 std::unique_ptr<SortedDataInterface::Cursor> PmseSortedDataInterface::newCursor(
                 OperationContext* txn, bool isForward) const {
-    return stdx::make_unique <PmseCursor> (txn, isForward, tree,
-                                           _desc->keyPattern(), _desc->unique());
+    return stdx::make_unique <PmseCursor> (txn, isForward, _tree,
+                                           _desc->keyPattern(),
+                                           _desc->unique());
 }
 
 class PmseSortedDataBuilderInterface : public SortedDataBuilderInterface {
     MONGO_DISALLOW_COPYING(PmseSortedDataBuilderInterface);
-public:
+ public:
     PmseSortedDataBuilderInterface(OperationContext* txn,
                                    PmseSortedDataInterface* index,
                                    bool dupsAllowed)
-            : _index(index), _txn(txn), _dupsAllowed(dupsAllowed) {
-    }
+    : _index(index),
+      _txn(txn),
+      _dupsAllowed(dupsAllowed) {}
 
     virtual Status addKey(const BSONObj& key, const RecordId& loc) {
         return _index->insert(_txn, key, loc, _dupsAllowed);
     }
 
-    void commit(bool mayInterrupt) {
-    }
-private:
+    void commit(bool mayInterrupt) {}
+ private:
     PmseSortedDataInterface* _index;
     OperationContext* _txn;
     bool _dupsAllowed;
-
 };
 
 SortedDataBuilderInterface* PmseSortedDataInterface::getBulkBuilder(
@@ -169,4 +171,4 @@ SortedDataBuilderInterface* PmseSortedDataInterface::getBulkBuilder(
     return new PmseSortedDataBuilderInterface(txn, this, dupsAllowed);
 }
 
-}
+}  // namespace mongo

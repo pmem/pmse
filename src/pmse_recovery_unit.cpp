@@ -38,28 +38,49 @@
 
 namespace mongo {
 
-    void PmseRecoveryUnit::commitUnitOfWork() {
-        try {
-            for (Changes::iterator it = _changes.begin(), end = _changes.end(); it != end; ++it) {
-                (*it)->commit();
-            }
-            _changes.clear();
-        } catch (...) {
-            throw;
+void PmseRecoveryUnit::commitUnitOfWork() {
+    try {
+        auto end = _changes.end();
+        for (auto it = _changes.begin(); it != end; ++it) {
+            (*it)->commit();
         }
+        _changes.clear();
+    } catch (...) {
+        throw;
     }
-
-    void PmseRecoveryUnit::abortUnitOfWork() {
-        try {
-            for (Changes::reverse_iterator it = _changes.rbegin(), end = _changes.rend(); it != end;
-                 ++it) {
-                ChangePtr change = *it;
-                change->rollback();
-            }
-            _changes.clear();
-        } catch (...) {
-            throw;
-        }
-    }
-
 }
+
+void PmseRecoveryUnit::abortUnitOfWork() {
+    try {
+        auto end = _changes.rend();
+        for (auto it = _changes.rbegin(); it != end; ++it) {
+            (*it)->rollback();
+        }
+        _changes.clear();
+    } catch (...) {
+        throw;
+    }
+}
+void PmseRecoveryUnit::beginUnitOfWork(OperationContext* opCtx) {}
+
+bool PmseRecoveryUnit::waitUntilDurable() {
+    return true;
+}
+
+void PmseRecoveryUnit::abandonSnapshot() {}
+
+SnapshotId PmseRecoveryUnit::getSnapshotId() const {
+    return SnapshotId();
+}
+
+void PmseRecoveryUnit::registerChange(Change* change) {
+    _changes.push_back(ChangePtr(change));
+}
+
+void* PmseRecoveryUnit::writingPtr(void* data, size_t len) {
+    return nullptr;
+}
+
+void PmseRecoveryUnit::setRollbackWritesDisabled() {}
+
+}  // namespace mongo

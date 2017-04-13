@@ -30,11 +30,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_TREE_H_
-#define SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_TREE_H_
-
-#include "mongo/db/storage/sorted_data_interface.h"
-#include "mongo/db/index/index_descriptor.h"
+#ifndef SRC_PMSE_TREE_H_
+#define SRC_PMSE_TREE_H_
 
 #include <libpmemobj.h>
 #include <libpmemobj++/make_persistent.hpp>
@@ -43,24 +40,27 @@
 #include <libpmemobj++/p.hpp>
 #include <libpmemobj++/pext.hpp>
 #include <libpmemobj++/pool.hpp>
-#include "libpmemobj++/transaction.hpp"
-#include "libpmemobj++/shared_mutex.hpp"
+#include <libpmemobj++/transaction.hpp>
+#include <libpmemobj++/shared_mutex.hpp>
+
+#include "mongo/db/storage/sorted_data_interface.h"
+#include "mongo/db/index/index_descriptor.h"
 
 using namespace nvml::obj;
 
 namespace mongo {
 
-const uint64_t TREE_ORDER = 3;     //number of elements in internal node
+const uint64_t TREE_ORDER = 3;  // number of elements in internal node
 const int64_t BSON_MIN_SIZE = 5;
 
-const uint64_t MAX_END = 2;
 const uint64_t MIN_END = 1;
+const uint64_t MAX_END = 2;
 
 class BSONObj_PM {
-public:
+ public:
     BSONObj_PM() = default;
 
-    BSONObj_PM(persistent_ptr<char> inputData) {
+    explicit BSONObj_PM(persistent_ptr<char> inputData) {
         data = inputData;
     }
 
@@ -73,20 +73,17 @@ public:
 };
 
 struct PmseTreeNode {
-    PmseTreeNode() :
-                    num_keys(0) {
-    }
+    PmseTreeNode() : num_keys(0) {}
 
-    PmseTreeNode(bool node_leaf) :
-                    num_keys(0) {
-        uint64_t i;
+    explicit PmseTreeNode(bool node_leaf)
+        : num_keys(0) {
         keys = make_persistent<BSONObj_PM[TREE_ORDER]>();
 
         if (node_leaf) {
             values_array = make_persistent<RecordId[TREE_ORDER]>();
             is_leaf = true;
         } else {
-            for (i = 0; i < TREE_ORDER; i++) {
+            for (uint64_t i = 0; i < TREE_ORDER; i++) {
                 children_array[i] = nullptr;
             }
         }
@@ -114,15 +111,16 @@ struct CursorObject {
 class PmseTree {
     friend class PmseCursor;
 
-public:
+ public:
     Status insert(pool_base pop, BSONObj_PM& key, const RecordId& loc,
                   const BSONObj& _ordering, bool dupsAllowed);
     bool remove(pool_base pop, BSONObj& key, const RecordId& loc,
                 bool dupsAllowed, const BSONObj& _ordering, OperationContext* txn);
 
-    Status dupKeyCheck(pool_base pop,BSONObj& key, const RecordId& loc);
-    p<long long> _records = 0;
-private:
+    Status dupKeyCheck(pool_base pop, BSONObj& key, const RecordId& loc);
+    p<int64_t> _records = 0;
+
+ private:
     uint64_t cut(uint64_t length);
     void placeAfter(PMEMobjpool *pm_pool, BSONObj& key, const RecordId& loc);
     void placeBefore(PMEMobjpool *pm_pool, BSONObj& key, const RecordId& loc);
@@ -181,13 +179,13 @@ private:
                     BSONObj& key, persistent_ptr<PmseTreeNode> node,
                     uint64_t index);
 
-    persistent_ptr<PmseTreeNode> current;
-    persistent_ptr<PmseTreeNode> root;
-    persistent_ptr<PmseTreeNode> first;
-    persistent_ptr<PmseTreeNode> last;
+    persistent_ptr<PmseTreeNode> _current;
+    persistent_ptr<PmseTreeNode> _root;
+    persistent_ptr<PmseTreeNode> _first;
+    persistent_ptr<PmseTreeNode> _last;
     BSONObj _ordering;
-    nvml::obj::shared_mutex pmutex;
+    nvml::obj::shared_mutex _pmutex;
 };
 
-}
-#endif /* SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_TREE_H_ */
+}  // namespace mongo
+#endif  // SRC_PMSE_TREE_H_

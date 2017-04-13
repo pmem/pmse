@@ -38,27 +38,23 @@
  */
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
 
-#include "pmse_list_int_ptr.h"
 #include "pmse_change.h"
+#include "pmse_list_int_ptr.h"
 
 #include "mongo/db/storage/recovery_unit.h"
-
-#include <exception>
-#include <mutex>
-
 #include "mongo/util/log.h"
 
 namespace mongo {
 
-PmseListIntPtr::PmseListIntPtr() : counter(1) {
-    pop = pool_by_vptr(this);
+PmseListIntPtr::PmseListIntPtr() : _counter(1) {
+    _pop = pool_by_vptr(this);
 }
 
 PmseListIntPtr::~PmseListIntPtr() {
 }
 
 void PmseListIntPtr::setPool() {
-    pop = pool_by_vptr(this);
+    _pop = pool_by_vptr(this);
 }
 
 uint64_t PmseListIntPtr::size() {
@@ -67,28 +63,27 @@ uint64_t PmseListIntPtr::size() {
 
 void PmseListIntPtr::insertKV(const persistent_ptr<KVPair> &key,
                               const persistent_ptr<InitData> &value, bool insertToFront) {
-    transaction::exec_tx(pop, [this, &key, &value, insertToFront] {
-        if (insertToFront){
+    transaction::exec_tx(_pop, [this, &key, &value, insertToFront] {
+        if (insertToFront) {
             key->ptr = value;
             key->next = nullptr;
-            if(head != nullptr){
-                key->next = head;
-                head = key;
-            }
-            else{
-                head = key;
-                tail = head;
+            if (_head != nullptr) {
+                key->next = _head;
+                _head = key;
+            } else {
+                _head = key;
+                _tail = _head;
             }
             _size++;
         } else {
             key->ptr = value;
             key->next = nullptr;
-            if (head != nullptr) {
-                tail->next = key;
-                tail = key;
+            if (_head != nullptr) {
+                _tail->next = key;
+                _tail = key;
             } else {
-                head = key;
-                tail = head;
+                _head = key;
+                _tail = _head;
             }
             _size++;
         }
@@ -98,37 +93,37 @@ void PmseListIntPtr::insertKV(const persistent_ptr<KVPair> &key,
 int64_t PmseListIntPtr::deleteKV(uint64_t key,
                                  persistent_ptr<KVPair> &deleted,
                                  OperationContext* txn) {
-    auto before = head;
+    auto before = _head;
     int64_t sizeFreed = 0;
-    for (auto rec = head; rec != nullptr; rec = rec->next) {
+    for (auto rec = _head; rec != nullptr; rec = rec->next) {
         if (rec->idValue == key) {
-            transaction::exec_tx(pop, [this, &deleted, &before,
+            transaction::exec_tx(_pop, [this, &deleted, &before,
                                        &sizeFreed, &rec, &txn] {
-                if (before != head) {
+                if (before != _head) {
                     before->next = rec->next;
                     if (before->next == nullptr)
-                        tail = before;
+                        _tail = before;
                     before.flush();
                 } else {
-                    if (head == rec) {
-                        head = rec->next;
+                    if (_head == rec) {
+                        _head = rec->next;
                     } else {
                         before->next = rec->next;
                         if (rec->next != nullptr) {
-                            tail = rec->next;
+                            _tail = rec->next;
                         } else {
-                            tail = before;
+                            _tail = before;
                         }
                     }
-                    if (head == nullptr) {
-                        tail = head;
+                    if (_head == nullptr) {
+                        _tail = _head;
                     }
                 }
                 _size--;
                 deleted = rec;
                 if (txn) {
                     auto rd = RecordData(deleted->ptr->data, deleted->ptr->size);
-                    txn->recoveryUnit()->registerChange(new RemoveChange(pop, (deleted->ptr).get(), rd.size()));
+                    txn->recoveryUnit()->registerChange(new RemoveChange(_pop, (deleted->ptr).get(), rd.size()));
                 }
                 sizeFreed = pmemobj_alloc_usable_size(deleted->ptr.raw());
                 delete_persistent<InitData>(deleted->ptr);
@@ -142,7 +137,7 @@ int64_t PmseListIntPtr::deleteKV(uint64_t key,
 }
 
 bool PmseListIntPtr::hasKey(uint64_t key) {
-    for (auto rec = head; rec != nullptr; rec = rec->next) {
+    for (auto rec = _head; rec != nullptr; rec = rec->next) {
         if (rec->idValue == key) {
             return true;
         }
@@ -150,38 +145,38 @@ bool PmseListIntPtr::hasKey(uint64_t key) {
     return false;
 }
 
-bool PmseListIntPtr::find(uint64_t key, persistent_ptr<InitData> &item_ptr) {
-    for (auto rec = head; rec != nullptr; rec = rec->next) {
+bool PmseListIntPtr::find(uint64_t key, persistent_ptr<InitData> *item_ptr) {
+    for (auto rec = _head; rec != nullptr; rec = rec->next) {
         if (rec->idValue == key) {
-            item_ptr = rec->ptr;
+            *item_ptr = rec->ptr;
             return true;
         }
     }
-    item_ptr = nullptr;
+    *item_ptr = nullptr;
     return false;
 }
 
-bool PmseListIntPtr::getPair(uint64_t key, persistent_ptr<KVPair> &item_ptr) {
-    for (auto rec = head; rec != nullptr; rec = rec->next) {
+bool PmseListIntPtr::getPair(uint64_t key, persistent_ptr<KVPair> *item_ptr) {
+    for (auto rec = _head; rec != nullptr; rec = rec->next) {
         if (rec->idValue == key) {
-            item_ptr = rec;
+            *item_ptr = rec;
             return true;
         }
     }
-    item_ptr = nullptr;
+    *item_ptr = nullptr;
     return false;
 }
 
 void PmseListIntPtr::update(uint64_t key,
                             const persistent_ptr<InitData> &value, OperationContext* txn) {
-    for (auto rec = head; rec != nullptr; rec = rec->next) {
+    for (auto rec = _head; rec != nullptr; rec = rec->next) {
         if (rec->idValue == key) {
             if (rec->ptr != nullptr) {
                 if (txn) {
-                    txn->recoveryUnit()->registerChange(new UpdateChange(pop, key, (rec->ptr).get(), rec->ptr->size));
+                    txn->recoveryUnit()->registerChange(new UpdateChange(_pop, key, (rec->ptr).get(), rec->ptr->size));
                 }
                 try {
-                    transaction::exec_tx(pop, [&rec] {
+                    transaction::exec_tx(_pop, [&rec] {
                         delete_persistent<InitData>(rec->ptr);
                     });
                 } catch(std::exception &e) {
@@ -195,24 +190,24 @@ void PmseListIntPtr::update(uint64_t key,
 }
 
 void PmseListIntPtr::clear(OperationContext* txn, PmseMap<InitData> *_mapper) {
-    if (!head)
+    if (!_head)
         return;
-    transaction::exec_tx(pop, [this, txn, _mapper] {
-        for (auto rec = head; rec != nullptr;) {
+    transaction::exec_tx(_pop, [this, txn, _mapper] {
+        for (auto rec = _head; rec != nullptr;) {
             if (txn)
-                txn->recoveryUnit()->registerChange(new TruncateChange(pop, _mapper, RecordId(rec->idValue),
-                                (rec->ptr).get(), rec->ptr->size));
+                txn->recoveryUnit()->registerChange(new TruncateChange(_pop, _mapper, RecordId(rec->idValue),
+                                                                       rec->ptr.get(), rec->ptr->size));
             auto temp = rec->next;
             delete_persistent<KVPair>(rec);
             rec = temp;
         }
-        head = nullptr;
+        _head = nullptr;
         _size = 0;
     });
 }
 
 uint64_t PmseListIntPtr::getNextId() {
-    return counter++;
+    return _counter++;
 }
 
 }  // namespace mongo

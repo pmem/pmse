@@ -30,32 +30,33 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_SORTED_DATA_INTERFACE_H_
-#define SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_SORTED_DATA_INTERFACE_H_
+#ifndef SRC_PMSE_SORTED_DATA_INTERFACE_H_
+#define SRC_PMSE_SORTED_DATA_INTERFACE_H_
 
-#include "mongo/db/storage/sorted_data_interface.h"
-#include "mongo/db/index/index_descriptor.h"
-#include "mongo/bson/bsonobj_comparator.h"
+#include "pmse_tree.h"
 
 #include <libpmemobj.h>
 #include <libpmemobj++/persistent_ptr.hpp>
 #include <libpmemobj++/make_persistent.hpp>
 #include <libpmemobj++/p.hpp>
 
-#include "pmse_tree.h"
+#include <map>
+#include <string>
 
-using namespace nvml::obj;
+#include "mongo/db/storage/sorted_data_interface.h"
+#include "mongo/db/index/index_descriptor.h"
+#include "mongo/bson/bsonobj_comparator.h"
 
 namespace mongo {
 
 class PmseSortedDataInterface : public SortedDataInterface {
-public:
-
+ public:
     PmseSortedDataInterface(StringData ident, const IndexDescriptor* desc,
-                            StringData dbpath, std::map<std::string, pool_base> *pool_handler);
+                            StringData dbpath, std::map<std::string,
+                            pool_base> *pool_handler);
 
     virtual SortedDataBuilderInterface* getBulkBuilder(OperationContext* txn,
-                                                       bool dupsAllowed) override;
+                                                       bool dupsAllowed);
 
     virtual Status insert(OperationContext* txn, const BSONObj& key,
                           const RecordId& loc, bool dupsAllowed);
@@ -68,23 +69,23 @@ public:
 
     virtual void fullValidate(OperationContext* txn, long long* numKeysOut,
                               ValidateResults* fullResults) const {
-        *numKeysOut = tree->_records;
-        // TODO: Implement fullValidate
+        *numKeysOut = _tree->_records;
+        // TODO(kfilipek): Implement fullValidate
     }
 
     virtual bool appendCustomStats(OperationContext* txn,
                                    BSONObjBuilder* output, double scale) const {
-        // TODO: Implement appendCustomStats
+        // TODO(kfilipek): Implement appendCustomStats
         return false;
     }
 
     virtual long long getSpaceUsedBytes(OperationContext* txn) const {
-        // TODO: Implement getSpaceUsedBytes
+        // TODO(kfilipek): Implement getSpaceUsedBytes
         return 0;
     }
 
     virtual bool isEmpty(OperationContext* txn) {
-        return tree->_records == 0 ? true : false;
+        return _tree->_records == 0 ? true : false;
     }
 
     virtual Status initAsEmpty(OperationContext* txn) {
@@ -94,13 +95,12 @@ public:
     std::unique_ptr<SortedDataInterface::Cursor> newCursor(
                     OperationContext* txn, bool isForward) const;
 
-private:
+ private:
     void moveToNext();
-    StringData filepath;
-    pool<PmseTree> pm_pool;
-    persistent_ptr<PmseTree> tree;
+    StringData _dbpath;
+    pool<PmseTree> _pm_pool;
+    persistent_ptr<PmseTree> _tree;
     const IndexDescriptor* _desc;
-
 };
-}
-#endif /* SRC_MONGO_DB_MODULES_PMSTORE_SRC_PMSE_SORTED_DATA_INTERFACE_H_ */
+}  // namespace mongo
+#endif  // SRC_PMSE_SORTED_DATA_INTERFACE_H_

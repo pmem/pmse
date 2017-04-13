@@ -33,6 +33,13 @@
 
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
 
+#include "pmse_engine.h"
+#include "pmse_record_store.h"
+#include "pmse_sorted_data_interface.h"
+
+#include <cstdlib>
+#include <string>
+
 #include "mongo/platform/basic.h"
 #include "mongo/base/disallow_copying.h"
 #include "mongo/db/storage/ephemeral_for_test/ephemeral_for_test_record_store.h"
@@ -41,36 +48,29 @@
 #include "mongo/db/catalog/collection_options.h"
 #include "mongo/util/log.h"
 
-#include "pmse_sorted_data_interface.h"
-#include "pmse_record_store.h"
-#include "pmse_engine.h"
-
-#include <cstdlib>
-#include <mutex>
-
 namespace mongo {
 
-PmseEngine::PmseEngine(std::string dbpath) : _DBPATH(dbpath) {
-    std::string path = _DBPATH+_IDENT_FILENAME.toString();
+PmseEngine::PmseEngine(std::string dbpath) : _dbPath(dbpath) {
+    std::string path = _dbPath+_kIdentFilename.toString();
     if (!boost::filesystem::exists(path)) {
-        pop = pool<PmseList>::create(path, "identList", 4*PMEMOBJ_MIN_POOL,
+        pop = pool<PmseList>::create(path, "pmse_identlist", 4 * PMEMOBJ_MIN_POOL,
                                          S_IRWXU);
         log() << "Engine pool created";
     } else {
-        pop = pool<PmseList>::open(path, "identList");
+        pop = pool<PmseList>::open(path, "pmse_identlist");
         log() << "Engine pool opened";
     }
 
     try {
-        identList = pop.get_root();
+        _identList = pop.get_root();
     } catch (std::exception& e) {
         log() << "Error while creating PMSE engine:" << e.what() << std::endl;
-    };
-    identList->setPool(pop);
+    }
+    _identList->setPool(pop);
 }
 
 PmseEngine::~PmseEngine() {
-    for (auto p : _pool_handler) {
+    for (auto p : _poolHandler) {
         p.second.close();
     }
     pop.close();
@@ -78,12 +78,11 @@ PmseEngine::~PmseEngine() {
 
 Status PmseEngine::createRecordStore(OperationContext* opCtx, StringData ns, StringData ident,
                                      const CollectionOptions& options) {
-    std::lock_guard<std::mutex> lock(_pmutex);
+    stdx::lock_guard<stdx::mutex> lock(_pmutex);
     auto status = Status::OK();
     try {
-        auto record_store = stdx::make_unique<PmseRecordStore>(ns, ident, options, _DBPATH, &_pool_handler);
-        identList->insertKV(ident.toString().c_str(), ns.toString().c_str());
-
+        auto record_store = stdx::make_unique<PmseRecordStore>(ns, ident, options, _dbPath, &_poolHandler);
+        _identList->insertKV(ident.toString().c_str(), ns.toString().c_str());
     } catch(std::exception &e) {
         status = Status(ErrorCodes::OutOfDiskSpace, e.what());
     }
@@ -94,17 +93,17 @@ std::unique_ptr<RecordStore> PmseEngine::getRecordStore(OperationContext* opCtx,
                                                         StringData ns,
                                                         StringData ident,
                                                         const CollectionOptions& options) {
-    identList->update(ident.toString().c_str(), ns.toString().c_str());
-    return stdx::make_unique<PmseRecordStore>(ns, ident, options, _DBPATH, &_pool_handler);
+    _identList->update(ident.toString().c_str(), ns.toString().c_str());
+    return stdx::make_unique<PmseRecordStore>(ns, ident, options, _dbPath, &_poolHandler);
 }
 
 Status PmseEngine::createSortedDataInterface(OperationContext* opCtx,
                                              StringData ident,
                                              const IndexDescriptor* desc) {
-    std::lock_guard<std::mutex> lock(_pmutex);
+    stdx::lock_guard<stdx::mutex> lock(_pmutex);
     try {
-        auto sorted_data_interface = PmseSortedDataInterface(ident, desc, _DBPATH, &_pool_handler);
-        identList->insertKV(ident.toString().c_str(), "");
+        auto sorted_data_interface = PmseSortedDataInterface(ident, desc, _dbPath, &_poolHandler);
+        _identList->insertKV(ident.toString().c_str(), "");
     } catch (std::exception &e) {
         return Status(ErrorCodes::OutOfDiskSpace, e.what());
     }
@@ -114,19 +113,19 @@ Status PmseEngine::createSortedDataInterface(OperationContext* opCtx,
 SortedDataInterface* PmseEngine::getSortedDataInterface(OperationContext* opCtx,
                                                         StringData ident,
                                                         const IndexDescriptor* desc) {
-    return new PmseSortedDataInterface(ident, desc, _DBPATH, &_pool_handler);
+    return new PmseSortedDataInterface(ident, desc, _dbPath, &_poolHandler);
 }
 
 Status PmseEngine::dropIdent(OperationContext* opCtx, StringData ident) {
-    std::lock_guard<std::mutex> lock(_pmutex);
-    boost::filesystem::path path(_DBPATH);
-    identList->deleteKV(ident.toString().c_str());
-    if ( _pool_handler.count(ident.toString()) > 0 ) {
-        _pool_handler[ident.toString()].close();
-        _pool_handler.erase(ident.toString());
+    stdx::lock_guard<stdx::mutex> lock(_pmutex);
+    boost::filesystem::path path(_dbPath);
+    _identList->deleteKV(ident.toString().c_str());
+    if (_poolHandler.count(ident.toString()) > 0) {
+        _poolHandler[ident.toString()].close();
+        _poolHandler.erase(ident.toString());
     }
-    boost::filesystem::remove_all(path.string()+ident.toString());
+    boost::filesystem::remove_all(path.string() + ident.toString());
     return Status::OK();
 }
 
-}
+}  // namespace mongo

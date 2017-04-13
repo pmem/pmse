@@ -49,8 +49,6 @@
 #include "mongo/db/storage/record_store.h"
 #include "mongo/stdx/memory.h"
 
-using namespace nvml::obj;
-
 namespace mongo {
 
 namespace {
@@ -85,16 +83,13 @@ class PmseRecordCursor final : public SeekableRecordCursor {
     persistent_ptr<PmseMap<InitData>> _mapper;
     persistent_ptr<KVPair> _before;
     persistent_ptr<KVPair> _cur;
-    persistent_ptr<KVPair> _restorePoint;
     p<bool> _eof = false;
     p<bool> _isCapped;
     p<bool> _forward;
     p<bool> _lastMoveWasRestore;
     p<bool> _positionCheck;
-    p<int64_t> actualListNumber = -1;
-    p<int64_t> _actualAfterRestore = 0;
-    p<uint64_t> position;
-    PMEMoid _currentOid = OID_NULL;
+    p<int64_t> _actualListNumber = -1;
+    p<uint64_t> _position;
 };
 
 class PmseRecordStore : public RecordStore {
@@ -221,8 +216,8 @@ class PmseRecordStore : public RecordStore {
     CappedCallback* _cappedCallback;
     int64_t _storageSize = baseSize;
     CollectionOptions _options;
-    const StringData _DBPATH;
-    pool<root> mapPool;
+    const StringData _dbPath;
+    pool<root> _mapPool;
     persistent_ptr<PmseMap<InitData>> _mapper;
 };
 }  // namespace mongo

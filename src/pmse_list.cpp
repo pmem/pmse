@@ -39,13 +39,18 @@
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
 
 #include "pmse_list.h"
+
 #include <exception>
+#include <string>
+#include <vector>
+
+#include "mongo/stdx/mutex.h"
 
 namespace mongo {
 
 void PmseList::insertKV(const char key[], const  char value[]) {
-    std::lock_guard<nvml::obj::mutex> lock(_pmutex);
-    transaction::exec_tx(pool_obj, [&] {
+    stdx::lock_guard<nvml::obj::mutex> lock(_pmutex);
+    transaction::exec_tx(pool_obj, [this, key, value] {
         persistent_ptr<KVPair> pair;
         try {
              pair = make_persistent<KVPair>();
@@ -68,18 +73,18 @@ void PmseList::insertKV(const char key[], const  char value[]) {
 }
 
 void PmseList::deleteKV(const char key[]) {
-    std::lock_guard<nvml::obj::mutex> lock(_pmutex);
+    stdx::lock_guard<nvml::obj::mutex> lock(_pmutex);
     auto before = head;
-    for(auto rec = head; rec != nullptr; rec = rec->next) {
-        if(strcmp(rec->kv.get_ro().id, key) == 0) {
+    for (auto rec = head; rec != nullptr; rec = rec->next) {
+        if (strcmp(rec->kv.get_ro().id, key) == 0) {
             if (before != head) {
                 before->next = rec->next;
-                if(before->next == nullptr) {
+                if (before->next == nullptr) {
                     tail = before;
                 }
                 before.flush();
             } else {
-                if(head == rec) {
+                if (head == rec) {
                     head = rec->next;
                 } else {
                     before->next = rec->next;
@@ -97,8 +102,8 @@ void PmseList::deleteKV(const char key[]) {
 }
 
 bool PmseList::hasKey(const char key[]) {
-    for(auto rec = head; rec != nullptr; rec = rec->next) {
-        if(strcmp(rec->kv.get_ro().id, key) == 0) {
+    for (auto rec = head; rec != nullptr; rec = rec->next) {
+        if (strcmp(rec->kv.get_ro().id, key) == 0) {
             return true;
         }
     }
@@ -106,19 +111,18 @@ bool PmseList::hasKey(const char key[]) {
 }
 
 std::vector<std::string> PmseList::getKeys() {
-    std::lock_guard<nvml::obj::mutex> lock(_pmutex);
+    stdx::lock_guard<nvml::obj::mutex> lock(_pmutex);
     std::vector<std::string> names;
-    for(auto rec = head; rec != nullptr; rec = rec->next) {
+    for (auto rec = head; rec != nullptr; rec = rec->next) {
         names.push_back(rec->kv.get_ro().id);
     }
     return names;
-
 }
 
 const char* PmseList::find(const char key[], bool &status) {
-    std::lock_guard<nvml::obj::mutex> lock(_pmutex);
-    for(auto rec = head; rec != nullptr; rec = rec->next) {
-        if(strcmp(rec->kv.get_ro().id, key) == 0) {
+    stdx::lock_guard<nvml::obj::mutex> lock(_pmutex);
+    for (auto rec = head; rec != nullptr; rec = rec->next) {
+        if (strcmp(rec->kv.get_ro().id, key) == 0) {
             status = true;
             return rec->kv.get_ro().value;
         }
@@ -128,8 +132,8 @@ const char* PmseList::find(const char key[], bool &status) {
 }
 
 void PmseList::update(const char key[], const char value[]) {
-    std::lock_guard<nvml::obj::mutex> lock(_pmutex);
-    for(auto rec = head; rec != nullptr; rec = rec->next) {
+    stdx::lock_guard<nvml::obj::mutex> lock(_pmutex);
+    for (auto rec = head; rec != nullptr; rec = rec->next) {
         if (strcmp(rec->kv.get_ro().id, key) == 0) {
             struct _values temp;
             strcpy(temp.id, key);
@@ -141,11 +145,11 @@ void PmseList::update(const char key[], const char value[]) {
 }
 
 void PmseList::clear() {
-    std::lock_guard<nvml::obj::mutex> lock(_pmutex);
-    if(!head)
+    stdx::lock_guard<nvml::obj::mutex> lock(_pmutex);
+    if (!head)
         return;
-    transaction::exec_tx(pool_obj, [&] {
-        for(auto rec = head; rec != nullptr; rec = rec->next) {
+    transaction::exec_tx(pool_obj, [this] {
+        for (auto rec = head; rec != nullptr; rec = rec->next) {
             auto temp = rec->next;
             pmemobj_tx_free(rec.raw());
             rec = temp;
@@ -158,4 +162,4 @@ void PmseList::setPool(pool<PmseList> pool_obj) {
     this->pool_obj = pool_obj;
 }
 
-}
+}  // namespace mongo

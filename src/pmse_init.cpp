@@ -34,6 +34,8 @@
 
 #include "pmse_engine.h"
 
+#include <string>
+
 #include "mongo/base/init.h"
 #include "mongo/db/service_context_d.h"
 #include "mongo/db/service_context.h"
@@ -42,8 +44,6 @@
 #include "mongo/db/storage/storage_options.h"
 #include "mongo/util/log.h"
 
-#include <iostream>
-
 namespace mongo {
 
 namespace {
@@ -51,8 +51,9 @@ const std::string storeName = "pmse";
 }
 
 namespace {
+
 class PmseEngineFactory : public StorageEngine::Factory {
-public:
+ public:
     virtual StorageEngine* create(const StorageGlobalParams& params,
                                   const StorageEngineLockFile* lockFile) const {
         KVStorageEngineOptions options;
@@ -68,12 +69,12 @@ public:
 
     virtual Status validateMetadata(const StorageEngineMetadata& metadata,
                                     const StorageGlobalParams& params) const {
-        // TODO: Implement validateMetadata
+        // TODO( ): Implement validateMetadata
         return Status::OK();
     }
 
     virtual BSONObj createMetadataOptions(const StorageGlobalParams& params) const {
-        // TODO: Implement createMetadataOptions
+        // TODO( ): Implement createMetadataOptions
         return BSONObj();
     }
 };
@@ -84,4 +85,4 @@ MONGO_INITIALIZER_WITH_PREREQUISITES(PMStoreEngineInit, ("SetGlobalEnvironment")
                                                      new PmseEngineFactory());
     return Status::OK();
 }
-}
+}  // namespace mongo
