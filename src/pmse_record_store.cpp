@@ -390,7 +390,7 @@ void PmseRecordCursor::save() {
 bool PmseRecordCursor::restore() {
     if (_positionCheck) {
         _positionCheck = false;
-        if (checkPosition() && _cur != nullptr && !_mapper->hasId(_cur->idValue))
+        if (checkPosition() && _cur != nullptr && _cur->isDeleted)
             _lastMoveWasRestore = true;
     }
     if (_mapper->isCapped()) {
