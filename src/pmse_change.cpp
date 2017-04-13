@@ -160,7 +160,7 @@ void InsertIndexChange::commit() {}
 void InsertIndexChange::rollback() {
     try {
         transaction::exec_tx(_pop, [this] {
-            _tree->remove(_pop, _key, _loc, _dupsAllowed, _desc->keyPattern(), nullptr);
+            //_tree->remove(_pop, _key, _loc, _dupsAllowed, _desc->keyPattern(), nullptr);
             --_tree->_records;
         });
     } catch (std::exception &e) {
@@ -174,23 +174,23 @@ RemoveIndexChange::RemoveIndexChange(pool_base pop, BSONObj key, RecordId loc,
           _dupsAllowed(dupsAllowed), _ordering(ordering) {}
 void RemoveIndexChange::commit() {}
 void RemoveIndexChange::rollback() {
-    persistent_ptr<char> obj;
-    Status status = Status::OK();
-    BSONObj_PM bsonPM;
-    try {
-        _tree = pool<PmseTree>(_pop).get_root();
-        transaction::exec_tx(_pop, [this, &obj, &status, &bsonPM] {
-            obj = pmemobj_tx_alloc(_key.objsize(), 1);
-            memcpy(static_cast<void*>(obj.get()), _key.objdata(), _key.objsize());
-            bsonPM.data = obj;
-            status = _tree->insert(_pop, bsonPM, _loc, _ordering, _dupsAllowed);
-            if (status == Status::OK()) {
-                ++_tree->_records;
-            }
-        });
-    } catch (std::exception &e) {
-        log() << e.what();
-    }
+//    persistent_ptr<char> obj;
+//    Status status = Status::OK();
+//    BSONObj_PM bsonPM;
+//    try {
+//        _tree = pool<PmseTree>(_pop).get_root();
+//        transaction::exec_tx(_pop, [this, &obj, &status, &bsonPM] {
+//            obj = pmemobj_tx_alloc(_key.objsize(), 1);
+//            memcpy(static_cast<void*>(obj.get()), _key.objdata(), _key.objsize());
+//            bsonPM.data = obj;
+//            status = _tree->insert(_pop, bsonPM, _loc, _ordering, _dupsAllowed);
+//            if (status == Status::OK()) {
+//                ++_tree->_records;
+//            }
+//        });
+//    } catch (std::exception &e) {
+//        log() << e.what();
+//    }
 }
 
 }  // namespace mongo

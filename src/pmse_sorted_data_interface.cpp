@@ -84,7 +84,7 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
 Status PmseSortedDataInterface::insert(OperationContext* txn,
                                        const BSONObj& key, const RecordId& loc,
                                        bool dupsAllowed) {
-    BSONObj_PM bsonPM;
+    //BSONObj_PM bsonPM;
     BSONObj owned = key.getOwned();
     Status status = Status::OK();
     persistent_ptr<char> obj;
@@ -97,13 +97,13 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
     }
 
     try {
-        transaction::exec_tx(_pm_pool, [&obj, &owned] {
+        /*transaction::exec_tx(_pm_pool, [&obj, &owned] {
             obj = pmemobj_tx_alloc(owned.objsize(), 1);
             memcpy(static_cast<void*>(obj.get()), owned.objdata(), owned.objsize());
-        });
-
-        bsonPM.data = obj;
-        status = _tree->insert(_pm_pool, bsonPM, loc, _desc->keyPattern(), dupsAllowed);
+        });*/
+        IndexKeyEntry entry(key.getOwned(), loc);
+        //bsonPM.data = obj;
+        status = _tree->insert(_pm_pool, entry, _desc->keyPattern(), dupsAllowed);
         if (status == Status::OK()) {
             ++_tree->_records;
             txn->recoveryUnit()->registerChange(new InsertIndexChange(_tree, _pm_pool, key, loc, dupsAllowed, _desc));
@@ -119,23 +119,24 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
  */
 void PmseSortedDataInterface::unindex(OperationContext* txn, const BSONObj& key,
                                       const RecordId& loc, bool dupsAllowed) {
-    BSONObj owned = key.getOwned();
-    try {
-        transaction::exec_tx(_pm_pool, [this, &owned, loc, dupsAllowed, txn] {
-            if (_tree->remove(_pm_pool, owned, loc, dupsAllowed,
-                             _desc->keyPattern(), txn))
-                --_tree->_records;
-        });
-    } catch (std::exception &e) {
-        log() << e.what();
-    }
+//    BSONObj owned = key.getOwned();
+//    try {
+//        transaction::exec_tx(_pm_pool, [this, &owned, loc, dupsAllowed, txn] {
+//            if (_tree->remove(_pm_pool, owned, loc, dupsAllowed,
+//                             _desc->keyPattern(), txn))
+//                --_tree->_records;
+//        });
+//    } catch (std::exception &e) {
+//        log() << e.what();
+//    }
 }
 
 Status PmseSortedDataInterface::dupKeyCheck(OperationContext* txn,
                                             const BSONObj& key,
                                             const RecordId& loc) {
-    BSONObj owned = key.getOwned();
-    return _tree->dupKeyCheck(_pm_pool, owned, loc);
+//    BSONObj owned = key.getOwned();
+//    return _tree->dupKeyCheck(_pm_pool, owned, loc);
+    return Status::OK();
 }
 
 std::unique_ptr<SortedDataInterface::Cursor> PmseSortedDataInterface::newCursor(
