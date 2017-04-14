@@ -74,18 +74,37 @@ class PmseCursor final : public SortedDataInterface::Cursor {
     void reattachToOperationContext(OperationContext* opCtx);
 
  private:
-//    virtual boost::optional<IndexKeyEntry> iterateToNext(RequestedInfo parts);
-//
-//    boost::optional<IndexKeyEntry> seekInTree(const BSONObj& key,
-//                                              KeyString::Discriminator discriminator,
-//                                              RequestedInfo parts);
-//
-//    persistent_ptr<PmseTreeNode> find_leaf(persistent_ptr<PmseTreeNode> node,
-//                                           const BSONObj& key,
-//                                           const BSONObj& _ordering);
-//    bool previous(CursorObject&);
-//    bool correctType(BSONObj record);
-//    void moveToNext();
+    virtual boost::optional<IndexKeyEntry> iterateToNext(RequestedInfo parts);
+
+    boost::optional<IndexKeyEntry> seekInTree(IndexKeyEntry& key,
+                                              KeyString::Discriminator discriminator,
+                                              RequestedInfo parts);
+
+    persistent_ptr<PmseTreeNode> find_leaf(persistent_ptr<PmseTreeNode> node,
+                                            IndexKeyEntry& entry,
+                                           const BSONObj& _ordering);
+    bool hasFieldNames(const BSONObj& obj) {
+        BSONForEach(e, obj) {
+            if (e.fieldName()[0])
+                return true;
+        }
+        return false;
+    }
+
+    BSONObj stripFieldNames(const BSONObj& query) {
+        if (!hasFieldNames(query))
+            return query;
+
+        BSONObjBuilder bb;
+        BSONForEach(e, query) {
+            bb.appendAs(e, StringData());
+        }
+        return bb.obj();
+    }
+
+    bool previous(CursorObject&);
+    bool correctType(BSONObj record);
+    void moveToNext();
 
     const bool _forward;
     const BSONObj& _ordering;
@@ -98,6 +117,7 @@ class PmseCursor final : public SortedDataInterface::Cursor {
      * Marks end position for seek and next. Set by setEndPosition().
      * */
     //BSONObj_PM* _endPosition;
+    IndexKeyEntry_PM* _endPosition;
     uint64_t _inf;
     bool _isEOF = true;
     /*
@@ -110,6 +130,15 @@ class PmseCursor final : public SortedDataInterface::Cursor {
     //BSONObj_PM end_min_pm;
     //BSONObj_PM end_max_pm;
 
+
+
+    struct EndState {
+        EndState(BSONObj key, RecordId loc) : query(std::move(key), loc) {}
+
+        IndexKeyEntry query;
+//        IndexSet::const_iterator it;
+    };
+    boost::optional<EndState> _endState;
     BSONObj _cursorKey;
     RecordId _cursorId;
 

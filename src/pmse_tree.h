@@ -189,14 +189,14 @@ class PmseTree {
                     IndexKeyEntry_PM& new_key, persistent_ptr<PmseTreeNode> right);
     uint64_t getLeftIndex(persistent_ptr<PmseTreeNode> parent,
                           persistent_ptr<PmseTreeNode> left);
-//    persistent_ptr<PmseTreeNode> insertKeyIntoNode(
-//                    pool_base pop, persistent_ptr<PmseTreeNode> root,
-//                    persistent_ptr<PmseTreeNode> parent, uint64_t left_index,
-//                    BSONObj_PM& new_key, persistent_ptr<PmseTreeNode> right);
-//    persistent_ptr<PmseTreeNode> insertToNodeAfterSplit(
-//                    pool_base pop, persistent_ptr<PmseTreeNode> root,
-//                    persistent_ptr<PmseTreeNode> old_node, uint64_t left_index,
-//                    BSONObj_PM& new_key, persistent_ptr<PmseTreeNode> right);
+    persistent_ptr<PmseTreeNode> insertKeyIntoNode(
+                    pool_base pop, persistent_ptr<PmseTreeNode> root,
+                    persistent_ptr<PmseTreeNode> parent, uint64_t left_index,
+                    IndexKeyEntry_PM& new_key, persistent_ptr<PmseTreeNode> right);
+    persistent_ptr<PmseTreeNode> insertToNodeAfterSplit(
+                    pool_base pop, persistent_ptr<PmseTreeNode> root,
+                    persistent_ptr<PmseTreeNode> old_node, uint64_t left_index,
+                    IndexKeyEntry_PM& new_key, persistent_ptr<PmseTreeNode> right);
 //    persistent_ptr<PmseTreeNode> adjustRoot(persistent_ptr<PmseTreeNode> root);
 //    persistent_ptr<PmseTreeNode> deleteEntry(pool_base pop, BSONObj& key,
 //                                             persistent_ptr<PmseTreeNode> node,

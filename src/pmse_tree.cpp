@@ -785,85 +785,92 @@ uint64_t PmseTree::getLeftIndex(persistent_ptr<PmseTreeNode> parent,
     }
     return left_index;
 }
-//
-///*
-// * Insert key into internal node
-// * Returns root.
-// */
-//persistent_ptr<PmseTreeNode> PmseTree::insertKeyIntoNode(
-//                pool_base pop, persistent_ptr<PmseTreeNode> root,
-//                persistent_ptr<PmseTreeNode> n, uint64_t left_index,
-//                BSONObj_PM& new_key, persistent_ptr<PmseTreeNode> right) {
-//    uint64_t i;
-//    for (i = n->num_keys; i > left_index; i--) {
-//        n->children_array[i + 1] = n->children_array[i];
-//        n->keys[i] = n->keys[i - 1];
-//    }
-//    n->children_array[left_index + 1] = right;
-//    n->keys[left_index] = new_key;
-//    n->num_keys = n->num_keys + 1;
-//    return root;
-//}
-//
-//persistent_ptr<PmseTreeNode> PmseTree::insertToNodeAfterSplit(
-//                pool_base pop, persistent_ptr<PmseTreeNode> root,
-//                persistent_ptr<PmseTreeNode> old_node, uint64_t left_index,
-//                BSONObj_PM& new_key, persistent_ptr<PmseTreeNode> right) {
-//    uint64_t i = 0, j, split;
-//    BSONObj_PM k_prime;
-//    persistent_ptr<PmseTreeNode> new_node;
-//    persistent_ptr<PmseTreeNode> child;
-//    persistent_ptr<PmseTreeNode> new_root;
-//    new_node = make_persistent<PmseTreeNode>(false);
-//    persistent_ptr<PmseTreeNode> temp_children_array[TREE_ORDER + 2];
-//    BSONObj_PM temp_keys_array[TREE_ORDER + 1];
-//
-//    for (i = 0, j = 0; i < old_node->num_keys + 1; i++, j++) {
-//        if (j == left_index + 1)
-//            j++;
-//        temp_children_array[j] = old_node->children_array[i];
-//    }
-//
-//    for (i = 0, j = 0; i < old_node->num_keys; i++, j++) {
-//        if (j == left_index)
-//            j++;
-//        temp_keys_array[j] = old_node->keys[i];
-//    }
-//
-//    temp_children_array[left_index + 1] = right;
-//    temp_keys_array[left_index] = new_key;
-//
-//    split = cut(TREE_ORDER + 1);
-//    old_node->num_keys = 0;
-//    for (i = 0; i < split - 1; i++) {
-//        old_node->children_array[i] = temp_children_array[i];
-//        old_node->keys[i] = temp_keys_array[i];
-//        old_node->num_keys = old_node->num_keys + 1;
-//    }
-//
-//    old_node->children_array[i] = temp_children_array[i];
-//    k_prime = temp_keys_array[split - 1];
-//
-//    for (++i, j = 0; i < (TREE_ORDER + 1); i++, j++) {
-//        new_node->children_array[j] = temp_children_array[i];
-//        new_node->keys[j] = temp_keys_array[i];
-//        new_node->num_keys = new_node->num_keys + 1;
-//    }
-//    new_node->children_array[j] = temp_children_array[i];
-//    new_node->parent = old_node->parent;
-//    for (i = 0; i <= new_node->num_keys; i++) {
-//        child = new_node->children_array[i];
-//        child->parent = new_node;
-//    }
-//    new_root = insertIntoNodeParent(pop, root, old_node, k_prime, new_node);
-//
-//    BSONObj_PM bsonPM = temp_keys_array[split-1];;
-//    if (bsonPM.data.raw().off != 0)
-//       pmemobj_tx_free(bsonPM.data.raw());
-//
-//    return new_root;
-//}
-//
+
+/*
+ * Insert key into internal node
+ * Returns root.
+ */
+persistent_ptr<PmseTreeNode> PmseTree::insertKeyIntoNode(
+                pool_base pop, persistent_ptr<PmseTreeNode> root,
+                persistent_ptr<PmseTreeNode> n, uint64_t left_index,
+                IndexKeyEntry_PM& new_key, persistent_ptr<PmseTreeNode> right) {
+    uint64_t i;
+    for (i = n->num_keys; i > left_index; i--) {
+        n->children_array[i + 1] = n->children_array[i];
+        n->keys[i] = n->keys[i - 1];
+    }
+    n->children_array[left_index + 1] = right;
+    (n->keys[left_index]).data = pmemobj_tx_alloc(new_key.getBSON().objsize(), 1);
+    memcpy(static_cast<void*>((n->keys[left_index]).data.get()), new_key.data.get(), new_key.getBSON().objsize());
+    (n->keys[left_index]).loc = new_key.loc;
+
+    //n->keys[left_index] = new_key;
+    n->num_keys = n->num_keys + 1;
+    return root;
+}
+
+persistent_ptr<PmseTreeNode> PmseTree::insertToNodeAfterSplit(
+                pool_base pop, persistent_ptr<PmseTreeNode> root,
+                persistent_ptr<PmseTreeNode> old_node, uint64_t left_index,
+                IndexKeyEntry_PM& new_key, persistent_ptr<PmseTreeNode> right) {
+    uint64_t i = 0, j, split;
+    IndexKeyEntry_PM k_prime;
+    persistent_ptr<PmseTreeNode> new_node;
+    persistent_ptr<PmseTreeNode> child;
+    persistent_ptr<PmseTreeNode> new_root;
+    new_node = make_persistent<PmseTreeNode>(false);
+    persistent_ptr<PmseTreeNode> temp_children_array[TREE_ORDER + 2];
+    IndexKeyEntry_PM temp_keys_array[TREE_ORDER + 1];
+
+    for (i = 0, j = 0; i < old_node->num_keys + 1; i++, j++) {
+        if (j == left_index + 1)
+            j++;
+        temp_children_array[j] = old_node->children_array[i];
+    }
+
+    for (i = 0, j = 0; i < old_node->num_keys; i++, j++) {
+        if (j == left_index)
+            j++;
+        temp_keys_array[j] = old_node->keys[i];
+    }
+
+    temp_children_array[left_index + 1] = right;
+    //temp_keys_array[left_index] = new_key;
+    (temp_keys_array[left_index]).data = pmemobj_tx_alloc(new_key.getBSON().objsize(), 1);
+    memcpy(static_cast<void*>((temp_keys_array[left_index]).data.get()), new_key.data.get(), new_key.getBSON().objsize());
+    (temp_keys_array[left_index]).loc = new_key.loc;
+
+    split = cut(TREE_ORDER + 1);
+    old_node->num_keys = 0;
+    for (i = 0; i < split - 1; i++) {
+        old_node->children_array[i] = temp_children_array[i];
+        old_node->keys[i] = temp_keys_array[i];
+        old_node->num_keys = old_node->num_keys + 1;
+    }
+
+    old_node->children_array[i] = temp_children_array[i];
+    k_prime = temp_keys_array[split - 1];
+
+    for (++i, j = 0; i < (TREE_ORDER + 1); i++, j++) {
+        new_node->children_array[j] = temp_children_array[i];
+        new_node->keys[j] = temp_keys_array[i];
+        new_node->num_keys = new_node->num_keys + 1;
+    }
+    new_node->children_array[j] = temp_children_array[i];
+    new_node->parent = old_node->parent;
+    for (i = 0; i <= new_node->num_keys; i++) {
+        child = new_node->children_array[i];
+        child->parent = new_node;
+    }
+    new_root = insertIntoNodeParent(pop, root, old_node, k_prime, new_node);
+
+    IndexKeyEntry_PM entryPM = temp_keys_array[split-1];;
+    if (entryPM.data.raw().off != 0)
+       pmemobj_tx_free(entryPM.data.raw());
+
+    return new_root;
+}
+
 /*
  * Inserts a new node into tree structure.
  * Returns root after tree modification.
@@ -899,13 +906,13 @@ persistent_ptr<PmseTreeNode> PmseTree::insertIntoNodeParent(
     /*
      * If there is slot for new key - just insert
      */
-//    if (parent->num_keys < TREE_ORDER) {
-//        return insertKeyIntoNode(pop, root, parent, left_index, key, right);
-//    }
-//    /*
-//     * There is no slot for new key - we need to split
-//     */
-//    return insertToNodeAfterSplit(pop, root, parent, left_index, key, right);
+    if (parent->num_keys < TREE_ORDER) {
+        return insertKeyIntoNode(pop, root, parent, left_index, key, right);
+    }
+    /*
+     * There is no slot for new key - we need to split
+     */
+    return insertToNodeAfterSplit(pop, root, parent, left_index, key, right);
 }
 
 /*
