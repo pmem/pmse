@@ -76,23 +76,23 @@ struct IndexKeyEntry_PM {
    /* IndexKeyEntry_PM(BSONObj inputKey, RecordId inputLoc){
 
     }*/
+public:
+    static int64_t compareEntries(IndexKeyEntry& leftEntry, IndexKeyEntry_PM& rightEntry, const BSONObj& ordering);
 
-    BSONObj getBSON() {
-        char* data_ptr = data.get();
-        return BSONObj(data_ptr);
-    }
+    BSONObj getBSON();
 
     /*
      * return  <0 if l<r. 0 if l==r. >0 if l>r
      */
-    static int compareEntries(IndexKeyEntry& leftEntry, IndexKeyEntry_PM& rightEntry, const BSONObj& ordering){
-        int cmp;
-        cmp = leftEntry.key.woCompare(rightEntry.getBSON(), ordering, false);
-        if(cmp!=0)
-            return cmp;
-        //when entries keys are equal, compare RecordID
-        return leftEntry.loc.repr()-rightEntry.loc;
-    }
+//    static int64_t compareEntries(IndexKeyEntry& leftEntry, IndexKeyEntry_PM& rightEntry, const BSONObj& ordering){
+//        int cmp;
+//        cmp = leftEntry.key.woCompare(rightEntry.getBSON(), ordering, false);
+//        if(cmp!=0)
+//            return cmp;
+//        //when entries keys are equal, compare RecordID
+//        std::cout <<"compare entries: equal keys, left="<<leftEntry.loc.repr()<< " right="<<rightEntry.loc <<std::endl;
+//        return leftEntry.loc.repr()-rightEntry.loc;
+//    }
 
     //BSONObj_PM key;
     persistent_ptr<char> data;

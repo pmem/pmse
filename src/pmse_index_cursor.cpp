@@ -47,8 +47,10 @@ enum BehaviorIfFieldIsEqual {
     greater = 'g',
 };
 
-const BSONObj PmseCursor::min = BSON("" << -std::numeric_limits<double>::infinity());
-const BSONObj PmseCursor::max = BSON("" << std::numeric_limits<double>::infinity());
+//const BSONObj PmseCursor::min = BSON("" << -std::numeric_limits<double>::infinity());
+//const BSONObj PmseCursor::max = BSON("" << std::numeric_limits<double>::infinity());
+//const PmseCursor::IndexKeyEntry_PM min;
+//const PmseCursor::IndexKeyEntry_PM max;
 
 PmseCursor::PmseCursor(OperationContext* txn, bool isForward,
                        persistent_ptr<PmseTree> tree, const BSONObj& ordering,
@@ -62,6 +64,8 @@ PmseCursor::PmseCursor(OperationContext* txn, bool isForward,
       cursorType(EOO),
       _endPosition(0),
       _inf(0),
+      _endPositionIsMax(false),
+//      _endPositionIsMin(false),
       _wasMoved(false),
       _eofRestore(false) {}
 
@@ -274,12 +278,83 @@ persistent_ptr<PmseTreeNode> PmseCursor::find_leaf(
 //    }
 //}
 
+boost::optional<IndexKeyEntry_PM*> PmseCursor::lower_bound(IndexKeyEntry entry) {
+    uint64_t i = 0;
+    int64_t cmp;
+    persistent_ptr<PmseTreeNode> current = _tree->_root;
+
+    while (!current->is_leaf) {
+        i = 0;
+        while (i < current->num_keys) {
+            cmp = IndexKeyEntry_PM::compareEntries(entry, current->keys[i], _ordering);
+            std::cout <<"cmp="<<cmp <<std::endl;
+            if (cmp > 0) {
+                i++;
+            } else {
+                break;
+            }
+        }
+        current = current->children_array[i];
+    }
+    for(i=0;i<current->num_keys;i++)
+    {
+        std::cout <<"lower_bound, found node,key["<<i<<"]= "<<( current->keys[i]).getBSON().toString() <<std::endl;
+
+    }
+
+
+    i=0;
+    while (i < current->num_keys && IndexKeyEntry_PM::compareEntries(entry, current->keys[i], _ordering) > 0) {
+        std::cout <<"leaf i="<<i<<" cmp="<<IndexKeyEntry_PM::compareEntries(entry, current->keys[i], _ordering)<<std::endl;
+            i++;
+    }
+    std::cout <<"i="<<i << std::endl;
+    //Iterated to end of node without finding bigger value
+    //It means: return next
+    if(i==current->num_keys)
+    {
+        if(current->next)
+            return &(current->next->keys[0]);
+
+//        if(_forward)
+            _endPositionIsMax = true;
+//        else
+//            _endPositionIsMin = true;
+        return boost::none;
+    }
+    return &(current->keys[i]);
+}
+
+void PmseCursor::seekEndCursor() {
+    boost::optional<IndexKeyEntry_PM*> it;
+            if (!_endState || !_tree->_root)
+                return;
+
+            it = lower_bound(_endState->query);
+//            if (!_forward) {
+//                // lower_bound lands us on or after query. Reverse cursors must be on or before.
+//                if (it == _data.end() || _data.value_comp().compare(*it, _endState->query) > 0) {
+//                    if (it == _data.begin()) {
+//                        it = _data.end();  // all existing data in range.
+//                    } else {
+//                        --it;
+//                    }
+//                }
+//            }
+
+//            if (it != _data.end())
+//                dassert(compareKeys(it->key, _endState->query.key) >= 0);
+            if(it)
+                _endPosition = it.get();
+        }
+
+
 void PmseCursor::setEndPosition(const BSONObj& key, bool inclusive){
 
-    int cmp = key.woCompare(max, _ordering, false);
+//    int cmp = key.woCompare(max, _ordering, false);
 
-    std::cout <<"key = "<< key.toString()<<" type="<<key.firstElementType() <<" cmp="<<cmp <<std::endl;
-
+    std::cout <<"setEndPosition key = "<< key.toString()<<" type="<<key.firstElementType()<<std::endl;// <<" cmp="<<cmp <<std::endl;
+    std::cout <<"inclusive = " << inclusive << std::endl;
     if (key.isEmpty()) {
         // This means scan to end of index.
         _endState = boost::none;
@@ -290,7 +365,15 @@ void PmseCursor::setEndPosition(const BSONObj& key, bool inclusive){
     // scan should land after the key if inclusive and before if exclusive.
     _endState = EndState(stripFieldNames(key),
                          _forward == inclusive ? RecordId::max() : RecordId::min());
-//    seekEndCursor();
+    std::cout <<"setEndPosition key:rec = "<< _endState->query.loc.repr() <<std::endl;
+
+    seekEndCursor();
+    if(_endPosition)
+        std::cout <<"end position = "<< _endPosition->getBSON().toString() <<std::endl;
+    if(_endPositionIsMax)
+        std::cout <<"end position = max"<<std::endl;
+
+
 }
 
 boost::optional<IndexKeyEntry> PmseCursor::next(
@@ -545,264 +628,291 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const BSONObj& key,
     boost::optional<IndexKeyEntry> entry;
     std::shared_lock<nvml::obj::shared_mutex> lock(_tree->_pmutex);
 
-    const auto discriminator = inclusive ? KeyString::kInclusive : KeyString::kExclusiveBefore;
+    if (key.isEmpty()) {
 
-    IndexKeyEntry seekEntry(key.getOwned(), RecordId(inclusive ? 0 : LLONG_MAX));
-    std::cout << "inclusive = " <<inclusive <<std::endl;
-    /**
-     * Remember current search result to return it
-     */
-    entry = seekInTree(seekEntry, discriminator, parts);
-    /**
-     * Remember next value to find it on next in case of deletion
-     */
-    if (_cursor.node.raw_ptr()->off != 0) {
-        moveToNext();
-        _wasMoved = true;
+        if(inclusive){
+            _cursor.node = _first;
+            _cursor.index = 0;
+        }
+        else{
+            _cursor.node = _last;
+            _cursor.index = (_cursor.node)->num_keys - 1;
+            return {};
+        }
     }
-    if (_cursor.node.raw_ptr()->off != 0) {
-        _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
-        _cursorId = RecordId(_cursor.node->keys[_cursor.index].loc);
-        // remember next value
-    } else {
-        _eofRestore = true;
+    else {
+        const BSONObj query = stripFieldNames(key);
+        locate(query, _forward == inclusive ? RecordId::min() : RecordId::max());
+        _lastMoveWasRestore = false;
+        if (_isEOF)
+            return {};
+//        dassert(inclusive ? compareKeys(_it->key, query) >= 0
+//                          : compareKeys(_it->key, query) > 0);
     }
+//        _it = inclusive ? _data.begin() : _data.end();
+//        _isEOF = (_it == _data.end());
+//        if (_isEOF) {
+//            return {};
+//        }
+
+//    const auto discriminator = inclusive ? KeyString::kInclusive : KeyString::kExclusiveBefore;
+//
+//    IndexKeyEntry seekEntry(key.getOwned(), RecordId(inclusive ? 0 : LLONG_MAX));
+//    std::cout << "inclusive = " <<inclusive <<std::endl;
+//    /**
+//     * Remember current search result to return it
+//     */
+//    entry = seekInTree(seekEntry, discriminator, parts);
+//    /**
+//     * Remember next value to find it on next in case of deletion
+//     */
+//    if (_cursor.node.raw_ptr()->off != 0) {
+//        moveToNext();
+//        _wasMoved = true;
+//    }
+//    if (_cursor.node.raw_ptr()->off != 0) {
+//        _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
+//        _cursorId = RecordId(_cursor.node->keys[_cursor.index].loc);
+//        // remember next value
+//    } else {
+//        _eofRestore = true;
+//    }
     return entry;
 }
 
 
-boost::optional<IndexKeyEntry> PmseCursor::seekInTree(
-                IndexKeyEntry& entry, KeyString::Discriminator discriminator, RequestedInfo parts =
-                                kKeyAndLoc) {
-    CursorObject _previousCursor;
-    uint64_t i = 0;
-    int cmp;
-
-    _returnValue = {};
-
-    if (!_tree->_root) {
-        return boost::none;
-    }
-
-    if (cursorType == EOO) {
-        cursorType = entry.key.firstElementType();
-    }
-
-    persistent_ptr<PmseTreeNode> node;
-
-    if (SimpleBSONObjComparator::kInstance.evaluate(entry.key == min)) {
-        _cursor.node = _first;
-        _cursor.index = 0;
-        if (_endPosition
-                        && SimpleBSONObjComparator::kInstance.evaluate(
-                                        _cursor.node->keys[_cursor.index].getBSON()
-                                                        == _endPosition->getBSON()))
-            return boost::none;
-
-        return IndexKeyEntry(
-                        _cursor.node->keys[_cursor.index].getBSON(),
-                        RecordId(_cursor.node->keys[_cursor.index].loc));
-    }
-    // only in backward
-    if (SimpleBSONObjComparator::kInstance.evaluate(entry.key == max)) {
-        if (_endPosition && _inf == MAX_END && (discriminator != KeyString::kInclusive))
-            return boost::none;
-
-        _cursor.node = _last;
-        _cursor.index = (_cursor.node)->num_keys - 1;
-        if (_endPosition && SimpleBSONObjComparator::kInstance.evaluate(_cursor.node->keys[_cursor.index].getBSON() ==
-                                                                        _endPosition->getBSON())) {
-            return boost::none;
-        }
-        return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
-                            RecordId(_cursor.node->keys[_cursor.index].loc));
-    }
-
-    node = find_leaf(_tree->_root, entry, _ordering);
-
-    if (node == NULL)
-        return boost::none;
-
-    /*
-     * Check if in current node exist value that is equal or bigger than input key
-     */
-    for (i = 0; i < node->num_keys; i++) {
-        //cmp = key.woCompare(node->keys[i].getBSON(), _ordering, false);
-        cmp = IndexKeyEntry_PM::compareEntries(entry, node->keys[i], _ordering);
-        if (cmp <= 0) {
-            break;
-        }
-    }
-    /*
-     * Check if bigger or equal element was found : i will be > than num_keys
-     * If element was not found: return the last one
-     */
-    if (i == node->num_keys) {
-        _cursor.node = node;
-        _cursor.index = i - 1;
-        if (_forward) {
-            moveToNext();
-            if (!_cursor.node) {
-                return boost::none;
-            }
-        }
-        if (_endPosition && SimpleBSONObjComparator::kInstance.evaluate(
-                                        _cursor.node->keys[_cursor.index].getBSON()
-                                                        == _endPosition->getBSON())) {
-            return boost::none;
-        } else {
-            return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
-                                RecordId(_cursor.node->keys[_cursor.index].loc));
-        }
-    }
-
-    /*
-     * Check if it is equal.
-     * If it is not equal then return bigger one or empty key if it is bigger than end position
-     * Check if next object has correct type. If not, go to next one.
-     */
-    if (cmp != 0) {
-        _cursor.node = node;
-        _cursor.index = i;
-
-        if (_endPosition && SimpleBSONObjComparator::kInstance.evaluate(node->keys[i].getBSON() ==
-                                                                        _endPosition->getBSON())) {
-            return boost::none;
-        }
-        /*
-         * Check object type. If wrong return next.
-         * For "Backward" direction return previous object because we are just after bigger one.
-         */
-        if (correctType(_cursor.node->keys[_cursor.index].getBSON())) {
-            if (_forward) {
-                return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
-                                RecordId(_cursor.node->keys[_cursor.index].loc));
-            } else {
-                moveToNext();
-                return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
-                                RecordId(_cursor.node->keys[_cursor.index].loc));
-            }
-        } else {
-            moveToNext();
-            return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
-                            RecordId(_cursor.node->keys[_cursor.index].loc));
-        }
-    }
-    /*
-     * So it is equal element
-     */
-    /*
-     * If not inclusive - return next not-equal element (while)
-     */
-    if (discriminator != KeyString::kInclusive) {
-        _cursor.node = node;
-        _cursor.index = i;
-
-        while (IndexKeyEntry_PM::compareEntries(entry, _cursor.node->keys[_cursor.index], _ordering) == 0) {
-            moveToNext();
-            if (!_cursor.node) {
-                return boost::none;
-            }
-        }
-        return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
-                        RecordId(_cursor.node->keys[_cursor.index].loc));
-    }
-
-    /*
-     * It is inclusive.
-     * Check if is first element in this node
-     */
-    if (_forward) {
-        if (i != 0) {
-            /*
-             * It is not first element. Return it.
-             */
-            _cursor.node = node;
-            _cursor.index = i;
-            return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
-                            RecordId(_cursor.node->keys[_cursor.index].loc));
-        } else {
-            /*
-             * It is first element. We should check previous nodes (non-unique keys) - forward
-             */
-            _cursor.node = node;
-            _cursor.index = i;
-            _previousCursor.node = node;
-            _previousCursor.index = i;
-            previous(_previousCursor);
-            /*
-             * Get previous until are not equal
-             */
-
-            while (!IndexKeyEntry_PM::compareEntries(entry, _previousCursor.node->keys[_previousCursor.index], _ordering)) {
-                _cursor.node = _previousCursor.node;
-                _cursor.index = _previousCursor.index;
-                if (!previous(_previousCursor)) {
-                    /*
-                     * There are no more prev
-                     */
-                    break;
-                }
-            }
-            return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
-                            RecordId(_cursor.node->keys[_cursor.index].loc));
-        }
-    } else {
-
-        while (IndexKeyEntry_PM::compareEntries(entry, node->keys[i], _ordering) == 0) {
-            _cursor.node = node;
-            _cursor.index = i;
-            /*
-             * There are next keys - increment i
-             */
-            if (i < (node->num_keys - 1)) {
-                i++;
-            } else {
-                /*
-                 * Move to next node - if it exist
-                 */
-                if (node->next != nullptr) {
-                    node = node->next;
-                    i = 0;
-                }
-            }
-        }
-        return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
-                        RecordId(_cursor.node->keys[_cursor.index].loc));
-    }
-}
+//boost::optional<IndexKeyEntry> PmseCursor::seekInTree(
+//                IndexKeyEntry& entry, KeyString::Discriminator discriminator, RequestedInfo parts =
+//                                kKeyAndLoc) {
+//    CursorObject _previousCursor;
+//    uint64_t i = 0;
+//    int cmp;
+//
+//    _returnValue = {};
+//
+//    if (!_tree->_root) {
+//        return boost::none;
+//    }
+//
+//    if (cursorType == EOO) {
+//        cursorType = entry.key.firstElementType();
+//    }
+//
+//    persistent_ptr<PmseTreeNode> node;
+//
+//    if (SimpleBSONObjComparator::kInstance.evaluate(entry.key == min)) {
+//        _cursor.node = _first;
+//        _cursor.index = 0;
+//        if (_endPosition
+//                        && SimpleBSONObjComparator::kInstance.evaluate(
+//                                        _cursor.node->keys[_cursor.index].getBSON()
+//                                                        == _endPosition->getBSON()))
+//            return boost::none;
+//
+//        return IndexKeyEntry(
+//                        _cursor.node->keys[_cursor.index].getBSON(),
+//                        RecordId(_cursor.node->keys[_cursor.index].loc));
+//    }
+//    // only in backward
+//    if (SimpleBSONObjComparator::kInstance.evaluate(entry.key == max)) {
+//        if (_endPosition && _inf == MAX_END && (discriminator != KeyString::kInclusive))
+//            return boost::none;
+//
+//        _cursor.node = _last;
+//        _cursor.index = (_cursor.node)->num_keys - 1;
+//        if (_endPosition && SimpleBSONObjComparator::kInstance.evaluate(_cursor.node->keys[_cursor.index].getBSON() ==
+//                                                                        _endPosition->getBSON())) {
+//            return boost::none;
+//        }
+//        return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
+//                            RecordId(_cursor.node->keys[_cursor.index].loc));
+//    }
+//
+//    node = find_leaf(_tree->_root, entry, _ordering);
+//
+//    if (node == NULL)
+//        return boost::none;
+//
+//    /*
+//     * Check if in current node exist value that is equal or bigger than input key
+//     */
+//    for (i = 0; i < node->num_keys; i++) {
+//        //cmp = key.woCompare(node->keys[i].getBSON(), _ordering, false);
+//        cmp = IndexKeyEntry_PM::compareEntries(entry, node->keys[i], _ordering);
+//        if (cmp <= 0) {
+//            break;
+//        }
+//    }
+//    /*
+//     * Check if bigger or equal element was found : i will be > than num_keys
+//     * If element was not found: return the last one
+//     */
+//    if (i == node->num_keys) {
+//        _cursor.node = node;
+//        _cursor.index = i - 1;
+//        if (_forward) {
+//            moveToNext();
+//            if (!_cursor.node) {
+//                return boost::none;
+//            }
+//        }
+//        if (_endPosition && SimpleBSONObjComparator::kInstance.evaluate(
+//                                        _cursor.node->keys[_cursor.index].getBSON()
+//                                                        == _endPosition->getBSON())) {
+//            return boost::none;
+//        } else {
+//            return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
+//                                RecordId(_cursor.node->keys[_cursor.index].loc));
+//        }
+//    }
+//
+//    /*
+//     * Check if it is equal.
+//     * If it is not equal then return bigger one or empty key if it is bigger than end position
+//     * Check if next object has correct type. If not, go to next one.
+//     */
+//    if (cmp != 0) {
+//        _cursor.node = node;
+//        _cursor.index = i;
+//
+//        if (_endPosition && SimpleBSONObjComparator::kInstance.evaluate(node->keys[i].getBSON() ==
+//                                                                        _endPosition->getBSON())) {
+//            return boost::none;
+//        }
+//        /*
+//         * Check object type. If wrong return next.
+//         * For "Backward" direction return previous object because we are just after bigger one.
+//         */
+//        if (correctType(_cursor.node->keys[_cursor.index].getBSON())) {
+//            if (_forward) {
+//                return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
+//                                RecordId(_cursor.node->keys[_cursor.index].loc));
+//            } else {
+//                moveToNext();
+//                return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
+//                                RecordId(_cursor.node->keys[_cursor.index].loc));
+//            }
+//        } else {
+//            moveToNext();
+//            return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
+//                            RecordId(_cursor.node->keys[_cursor.index].loc));
+//        }
+//    }
+//    /*
+//     * So it is equal element
+//     */
+//    /*
+//     * If not inclusive - return next not-equal element (while)
+//     */
+//    if (discriminator != KeyString::kInclusive) {
+//        _cursor.node = node;
+//        _cursor.index = i;
+//
+//        while (IndexKeyEntry_PM::compareEntries(entry, _cursor.node->keys[_cursor.index], _ordering) == 0) {
+//            moveToNext();
+//            if (!_cursor.node) {
+//                return boost::none;
+//            }
+//        }
+//        return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
+//                        RecordId(_cursor.node->keys[_cursor.index].loc));
+//    }
+//
+//    /*
+//     * It is inclusive.
+//     * Check if is first element in this node
+//     */
+//    if (_forward) {
+//        if (i != 0) {
+//            /*
+//             * It is not first element. Return it.
+//             */
+//            _cursor.node = node;
+//            _cursor.index = i;
+//            return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
+//                            RecordId(_cursor.node->keys[_cursor.index].loc));
+//        } else {
+//            /*
+//             * It is first element. We should check previous nodes (non-unique keys) - forward
+//             */
+//            _cursor.node = node;
+//            _cursor.index = i;
+//            _previousCursor.node = node;
+//            _previousCursor.index = i;
+//            previous(_previousCursor);
+//            /*
+//             * Get previous until are not equal
+//             */
+//
+//            while (!IndexKeyEntry_PM::compareEntries(entry, _previousCursor.node->keys[_previousCursor.index], _ordering)) {
+//                _cursor.node = _previousCursor.node;
+//                _cursor.index = _previousCursor.index;
+//                if (!previous(_previousCursor)) {
+//                    /*
+//                     * There are no more prev
+//                     */
+//                    break;
+//                }
+//            }
+//            return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
+//                            RecordId(_cursor.node->keys[_cursor.index].loc));
+//        }
+//    } else {
+//
+//        while (IndexKeyEntry_PM::compareEntries(entry, node->keys[i], _ordering) == 0) {
+//            _cursor.node = node;
+//            _cursor.index = i;
+//            /*
+//             * There are next keys - increment i
+//             */
+//            if (i < (node->num_keys - 1)) {
+//                i++;
+//            } else {
+//                /*
+//                 * Move to next node - if it exist
+//                 */
+//                if (node->next != nullptr) {
+//                    node = node->next;
+//                    i = 0;
+//                }
+//            }
+//        }
+//        return IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(),
+//                        RecordId(_cursor.node->keys[_cursor.index].loc));
+//    }
+//}
 
 boost::optional<IndexKeyEntry> PmseCursor::seek(const IndexSeekPoint& seekPoint,
                                                 RequestedInfo parts = kKeyAndLoc) {
     boost::optional<IndexKeyEntry> entry;
-    std::shared_lock<nvml::obj::shared_mutex> lock(_tree->_pmutex);
-
-    BSONObj key = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
-    auto discriminator = KeyString::kInclusive;
-
-    BSONObjIterator lhsIt(key);
-    while (lhsIt.more()) {
-        const BSONElement l = lhsIt.next();
-        BehaviorIfFieldIsEqual lEqBehavior = BehaviorIfFieldIsEqual(l.fieldName()[0]);
-        if (lEqBehavior) {
-            if (lEqBehavior == greater) {
-                discriminator = KeyString::kExclusiveBefore;
-            }
-        }
-    }
-    IndexKeyEntry seekEntry(key.getOwned(), RecordId(0));
-    entry = seekInTree(seekEntry, discriminator, parts);
-    if (_cursor.node.raw_ptr()->off != 0) {
-        moveToNext();
-        _wasMoved = true;
-    }
-    if (_cursor.node.raw_ptr()->off != 0) {
-        _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
-        _cursorId = RecordId(_cursor.node->keys[_cursor.index].loc);
-        // remember next value
-    } else {
-        _eofRestore = true;
-    }
+//    std::shared_lock<nvml::obj::shared_mutex> lock(_tree->_pmutex);
+//
+//    BSONObj key = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
+//    auto discriminator = KeyString::kInclusive;
+//
+//    BSONObjIterator lhsIt(key);
+//    while (lhsIt.more()) {
+//        const BSONElement l = lhsIt.next();
+//        BehaviorIfFieldIsEqual lEqBehavior = BehaviorIfFieldIsEqual(l.fieldName()[0]);
+//        if (lEqBehavior) {
+//            if (lEqBehavior == greater) {
+//                discriminator = KeyString::kExclusiveBefore;
+//            }
+//        }
+//    }
+//    IndexKeyEntry seekEntry(key.getOwned(), RecordId(0));
+//    entry = seekInTree(seekEntry, discriminator, parts);
+//    if (_cursor.node.raw_ptr()->off != 0) {
+//        moveToNext();
+//        _wasMoved = true;
+//    }
+//    if (_cursor.node.raw_ptr()->off != 0) {
+//        _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
+//        _cursorId = RecordId(_cursor.node->keys[_cursor.index].loc);
+//        // remember next value
+//    } else {
+//        _eofRestore = true;
+//    }
     return entry;
 }
 

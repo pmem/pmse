@@ -46,6 +46,27 @@
 
 namespace mongo {
 
+
+int64_t IndexKeyEntry_PM::compareEntries(IndexKeyEntry& leftEntry, IndexKeyEntry_PM& rightEntry, const BSONObj& ordering){
+    int cmp;
+    cmp = leftEntry.key.woCompare(rightEntry.getBSON(), ordering, false);
+    if(cmp!=0)
+        return cmp;
+    //when entries keys are equal, compare RecordID
+    std::cout <<"compare entries: equal keys, left="<<leftEntry.loc.repr()<< " right="<<rightEntry.loc <<std::endl;
+    if(leftEntry.loc.repr()<rightEntry.loc)
+        return -1;
+    else if(leftEntry.loc.repr() > rightEntry.loc)
+        return 1;
+    else return 0;
+//    return leftEntry.loc.repr()-rightEntry.loc;
+}
+
+BSONObj IndexKeyEntry_PM::getBSON() {
+    char* data_ptr = data.get();
+    return BSONObj(data_ptr);
+}
+
 //Status PmseTree::dupKeyCheck(pool_base pop, BSONObj& key, const RecordId& loc) {
 //    persistent_ptr<PmseTreeNode> node;
 //    uint64_t i;
