@@ -110,6 +110,8 @@ class PmseCursor final : public SortedDataInterface::Cursor {
     void moveToNext();
 //    int64_t compareEntries(BSONObj& leftBSON, RecordId& leftLoc, IndexKeyEntry& rightEntry, const BSONObj& ordering);
     bool atOrPastEndPointAfterSeeking();
+    bool atEndPoint();
+//    void advance()
 
     const bool _forward;
     const BSONObj& _ordering;
@@ -122,12 +124,13 @@ class PmseCursor final : public SortedDataInterface::Cursor {
      * Marks end position for seek and next. Set by setEndPosition().
      * */
     //BSONObj_PM* _endPosition;
-    IndexKeyEntry_PM* _endPosition;
+
     uint64_t _inf;
     bool _isEOF = true;
     /*
      * Cursor used for iterating with next until "_endPosition"
      */
+    boost::optional<IndexKeyEntry> _endPosition;
     CursorObject _cursor;
 
     CursorObject _returnValue;

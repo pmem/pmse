@@ -62,7 +62,6 @@ PmseCursor::PmseCursor(OperationContext* txn, bool isForward,
       _unique(unique),
       _tree(tree),
       cursorType(EOO),
-      _endPosition(0),
       _inf(0),
       _endPositionIsDataEnd(false),
       _locateFoundDataEnd(false),
@@ -390,14 +389,40 @@ void PmseCursor::locate(const BSONObj& key, const RecordId& loc) {
             _locateFoundDataEnd = false;
             _isEOF = true;
         }
+        if(locateFound){
+            _cursor.node = locateCursor.node;
+            _cursor.index = locateCursor.index;
+        }
     }
     else {  //manage backward
         std::cout <<"locate backward" << std::endl;
+        if(_locateFoundDataEnd) {
+            _locateFoundDataEnd = false;
+            std::cout <<"locate, cursor key["<<_last->num_keys-1<<"]= "<<( _last->keys[_last->num_keys-1]).getBSON().toString() <<std::endl;
+            _cursor.node = _last;
+            _cursor.index = _last->num_keys-1;
+        }
+        else {
+            _cursor.node = locateCursor.node;
+            _cursor.index = locateCursor.index;
+            std::cout <<"locate, cursor key["<<_cursor.index<<"]= "<<( _cursor.node->keys[_cursor.index]).getBSON().toString() <<std::endl;
+            int cmp;
+                cmp = (_cursor.node->keys[_cursor.index]).getBSON().woCompare(query.key,_ordering, false);
+                if(cmp==0){
+                    if((_cursor.node->keys[_cursor.index]).loc<query.loc.repr())
+                        cmp = -1;
+                    else if((_cursor.node->keys[_cursor.index]).loc > query.loc.repr())
+                        cmp = 1;
+                    else cmp = 0;
+                }
+            if(cmp) {
+                moveToNext();
+            }
+        }
+//        if (_it == _data.end() || _data.value_comp().compare(*_it, query) > 0)
+//            moveToNext();  // sets _isEOF if there is nothing more to return.
     }
-    if(locateFound){
-        _cursor.node = locateCursor.node;
-        _cursor.index = locateCursor.index;
-    }
+
 
     if (atOrPastEndPointAfterSeeking())
         _isEOF = true;
@@ -411,18 +436,22 @@ void PmseCursor::locate(const BSONObj& key, const RecordId& loc) {
 
 void PmseCursor::seekEndCursor() {
     CursorObject endCursor;
-    bool locateResult;
+    bool found;
 
             if (!_endState || !_tree->_root)
                 return;
 
-            locateResult = lower_bound(_endState->query, endCursor);
+            found = lower_bound(_endState->query, endCursor);
             if(_locateFoundDataEnd) {
                 _endPositionIsDataEnd = true;
                 _locateFoundDataEnd = false;
             }
-//            if (!_forward) {
-//                // lower_bound lands us on or after query. Reverse cursors must be on or before.
+            if (!_forward) {
+                // lower_bound lands us on or after query. Reverse cursors must be on or before.
+                if( (endCursor.node == _first) && (endCursor.index == 0) ) {
+                    _endPositionIsDataEnd = true;
+                    return;
+                }
 //                if (it == _data.end() || _data.value_comp().compare(*it, _endState->query) > 0) {
 //                    if (it == _data.begin()) {
 //                        it = _data.end();  // all existing data in range.
@@ -430,12 +459,16 @@ void PmseCursor::seekEndCursor() {
 //                        --it;
 //                    }
 //                }
-//            }
+            }
 
 //            if (it != _data.end())
 //                dassert(compareKeys(it->key, _endState->query.key) >= 0);
-            if(locateResult)
-                _endPosition = &endCursor.node->keys[endCursor.index];
+            if(found)
+            {
+                _endPosition = IndexKeyEntry(endCursor.node->keys[endCursor.index].getBSON(),RecordId(endCursor.node->keys[endCursor.index].loc));
+//                _endPosition.get().key = endCursor.node->keys[endCursor.index].getBSON();
+//                _endPosition.get().loc. = RecordId(endCursor.node->keys[endCursor.index].loc);
+            }
         }
 
 
@@ -459,40 +492,93 @@ void PmseCursor::setEndPosition(const BSONObj& key, bool inclusive){
 
     seekEndCursor();
     if(_endPosition)
-        std::cout <<"end position = "<< _endPosition->getBSON().toString() <<std::endl;
+        std::cout <<"end position = "<< _endPosition.get().key.toString()<< " loc="<<_endPosition.get().loc <<std::endl;
+
     if(_endPositionIsDataEnd)
         std::cout <<"end position = data end"<<std::endl;
 
 
 }
 
+bool PmseCursor::atEndPoint() {
+//    return _endState && (_cursor.node->keys[_cursor.index]).getBSON() == _endState->query.key && (_cursor.node->keys[_cursor.index]).loc == _endState->query.loc;
+//    return ((SimpleBSONObjComparator::kInstance.evaluate(
+//                                                _cursor.node->keys[_cursor.index].getBSON() ==
+//                                                _endPosition.getBSON())) && (_cursor.node->keys[_cursor.index]).loc == _endPosition.loc);
+    if(_endPosition && (IndexKeyEntry_PM::compareEntries(_endPosition.get(),_cursor.node->keys[_cursor.index], _ordering) ==0))
+        return true;
+    return false;
+    //TODO: Compare pointers or store endPosition value and compare it
+//    return _cursor.node->keys[_cursor.index] == _endPosition;
+}
+
+// Advances once in the direction of the scan, updating _isEOF as needed.
+// Does nothing if already _isEOF.
+//void PmseCursor::advance() {
+//    if (_isEOF)
+//        return;
+//    if (_forward) {
+//        if (_it != _data.end())
+//            ++_it;
+//        if (_it == _data.end() || atEndPoint())
+//            _isEOF = true;
+//    } else {
+//        if (_it == _data.begin() || _data.empty()) {
+//            _isEOF = true;
+//        } else {
+//            --_it;
+//        }
+//        if (atEndPoint())
+//            _isEOF = true;
+//    }
+//}
+
 boost::optional<IndexKeyEntry> PmseCursor::next(
                 RequestedInfo parts = kKeyAndLoc) {
-    boost::optional<IndexKeyEntry> entry;
-    std::shared_lock<nvml::obj::shared_mutex> lock(_tree->_pmutex);
-    /**
-     * Find next correct value for cursor
-     */
-    entry = iterateToNext(parts);
-    if (!entry.is_initialized()) {
-        return entry;
-    }
+//    boost::optional<IndexKeyEntry> entry;
+//    std::shared_lock<nvml::obj::shared_mutex> lock(_tree->_pmutex);
+//    /**
+//     * Find next correct value for cursor
+//     */
+//    entry = iterateToNext(parts);
+//    if (!entry.is_initialized()) {
+//        return entry;
+//    }
+//
+//    /**
+//     * Move to next and remember it
+//     */
+//    if (!_wasMoved) {
+//        moveToNext();
+//        _wasMoved = true;
+//    }
+//    if (_cursor.node.raw_ptr()->off != 0) {
+//        _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
+//        _cursorId = RecordId(_cursor.node->keys[_cursor.index].loc);
+//        // remember next value
+//    } else {
+//        _eofRestore = true;
+//    }
+//    return entry;
 
-    /**
-     * Move to next and remember it
-     */
-    if (!_wasMoved) {
+//    if (_lastMoveWasRestore) {
+//        // Return current position rather than advancing.
+//        _lastMoveWasRestore = false;
+//    } else {
+//        std::cout <<" next, before advance"<<*_it << std::endl;
         moveToNext();
-        _wasMoved = true;
-    }
-    if (_cursor.node.raw_ptr()->off != 0) {
-        _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
-        _cursorId = RecordId(_cursor.node->keys[_cursor.index].loc);
-        // remember next value
-    } else {
-        _eofRestore = true;
-    }
-    return entry;
+        if(!_cursor.node)
+            return boost::none;
+        std::cout <<" next="<<_cursor.node->keys[_cursor.index].getBSON() << " loc="<<_cursor.node->keys[_cursor.index].loc << std::endl;
+        if (atEndPoint())
+            _isEOF = true;
+//    }
+
+    if (_isEOF)
+        return {};
+
+//    std::cout <<" next return="<<*_it << std::endl;
+    return IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),RecordId((_cursor.node->keys[_cursor.index]).loc));
 }
 
 boost::optional<IndexKeyEntry> PmseCursor::iterateToNext(RequestedInfo parts = kKeyAndLoc) {
@@ -565,31 +651,31 @@ boost::optional<IndexKeyEntry> PmseCursor::iterateToNext(RequestedInfo parts = k
     /**
      * Do step forward
      */
-    if (!_wasMoved) {
-        moveToNext();
-    }
-    _wasMoved = false;
-
-    /**
-     * Iterate position to next correct value if needed
-     */
-    do {
-        if (_cursor.node) {
-            if (_endPosition && (SimpleBSONObjComparator::kInstance.evaluate(
-                                            _cursor.node->keys[_cursor.index].getBSON() ==
-                                            _endPosition->getBSON()))) {
-                return boost::none;
-            }
-            if (correctType(_cursor.node->keys[_cursor.index].getBSON())) {
-                return IndexKeyEntry(
-                            _cursor.node->keys[_cursor.index].getBSON(),
-                            RecordId(_cursor.node->keys[_cursor.index].loc));
-            }
-            moveToNext();
-        } else {
-            return boost::none;
-        }
-    } while (true);
+//    if (!_wasMoved) {
+//        moveToNext();
+//    }
+//    _wasMoved = false;
+//
+//    /**
+//     * Iterate position to next correct value if needed
+//     */
+//    do {
+//        if (_cursor.node) {
+//            if (_endPosition && (SimpleBSONObjComparator::kInstance.evaluate(
+//                                            _cursor.node->keys[_cursor.index].getBSON() ==
+//                                            _endPosition->getBSON()))) {
+//                return boost::none;
+//            }
+//            if (correctType(_cursor.node->keys[_cursor.index].getBSON())) {
+//                return IndexKeyEntry(
+//                            _cursor.node->keys[_cursor.index].getBSON(),
+//                            RecordId(_cursor.node->keys[_cursor.index].loc));
+//            }
+//            moveToNext();
+//        } else {
+//            return boost::none;
+//        }
+//    } while (true);
     return boost::none;
 }
 
