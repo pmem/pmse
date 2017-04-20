@@ -101,13 +101,15 @@ class PmseCursor final : public SortedDataInterface::Cursor {
         }
         return bb.obj();
     }
-
+    void locate(const BSONObj& key, const RecordId& loc);
     void seekEndCursor();
-    boost::optional<IndexKeyEntry_PM*> lower_bound(IndexKeyEntry entry);
+    bool lower_bound(IndexKeyEntry entry, CursorObject& cursor);
 
     bool previous(CursorObject&);
     bool correctType(BSONObj record);
     void moveToNext();
+//    int64_t compareEntries(BSONObj& leftBSON, RecordId& leftLoc, IndexKeyEntry& rightEntry, const BSONObj& ordering);
+    bool atOrPastEndPointAfterSeeking();
 
     const bool _forward;
     const BSONObj& _ordering;
@@ -127,6 +129,7 @@ class PmseCursor final : public SortedDataInterface::Cursor {
      * Cursor used for iterating with next until "_endPosition"
      */
     CursorObject _cursor;
+
     CursorObject _returnValue;
 //    static const BSONObj min;
 //    static const BSONObj max;
@@ -147,7 +150,9 @@ class PmseCursor final : public SortedDataInterface::Cursor {
     boost::optional<EndState> _endState;
     BSONObj _cursorKey;
     RecordId _cursorId;
-    bool _endPositionIsMax;
+    bool _endPositionIsDataEnd;
+    bool _locateFoundDataEnd;
+
 //    bool _endPositionIsMin;
 
     bool _wasMoved;
