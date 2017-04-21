@@ -65,6 +65,7 @@ struct _pair {
     persistent_ptr<InitData> ptr;
     persistent_ptr<_pair> next;
     p<uint64_t> position;
+    p<uint64_t> isDeleted;
 };
 
 template<class InitData>

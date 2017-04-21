@@ -233,9 +233,11 @@ class PmseMap {
         stdx::lock_guard<nvml::obj::mutex> guard(_pmutex);
         if (list != nullptr) {
             item->next = list;
+            item->isDeleted = true;
             list = item;
         } else {
             item->next = nullptr;
+            item->isDeleted = true;
             list = item;
         }
     }
@@ -286,6 +288,7 @@ class PmseMap {
             } else {
                 temp = _deleted;
                 _deleted = _deleted->next;
+                temp->isDeleted = false;
                 return temp;
             }
             return temp;
