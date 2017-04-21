@@ -119,10 +119,11 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
  */
 void PmseSortedDataInterface::unindex(OperationContext* txn, const BSONObj& key,
                                       const RecordId& loc, bool dupsAllowed) {
-//    BSONObj owned = key.getOwned();
+    //BSONObj owned = key.getOwned();
+//    IndexKeyEntry entry(key.getOwned(), loc);
 //    try {
-//        transaction::exec_tx(_pm_pool, [this, &owned, loc, dupsAllowed, txn] {
-//            if (_tree->remove(_pm_pool, owned, loc, dupsAllowed,
+//        transaction::exec_tx(_pm_pool, [this, &entry, dupsAllowed, txn] {
+//            if (_tree->remove(_pm_pool, entry, loc, dupsAllowed,
 //                             _desc->keyPattern(), txn))
 //                --_tree->_records;
 //        });

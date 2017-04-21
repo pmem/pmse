@@ -962,8 +962,8 @@ Status PmseTree::insert(pool_base pop, IndexKeyEntry& entry,
                         const BSONObj& ordering, bool dupsAllowed) {
     persistent_ptr<PmseTreeNode> node;
     Status status = Status::OK();
-//    uint64_t i;
-//    int64_t cmp;
+    uint64_t i;
+    int64_t cmp;
     stdx::unique_lock<nvml::obj::shared_mutex> lock(_pmutex);
 
     if (!_root) {
@@ -981,27 +981,27 @@ Status PmseTree::insert(pool_base pop, IndexKeyEntry& entry,
         return status;
     }
     node = locateLeafWithKeyPM(_root, entry, ordering);
-//
-//    /*
-//     * Duplicate key check
-//     */
-//    if (!dupsAllowed) {
-//        for (i = 0; i < node->num_keys; i++) {
-//            cmp = key.getBSON().woCompare(node->keys[i].getBSON(),
-//                                          ordering, false);
-//            if (cmp == 0) {
-//                if (node->values_array[i] != loc) {
-//                    StringBuilder sb;
-//                    sb << "Duplicate key error ";
-//                    sb << "dup key: " << key.getBSON().toString();
-//                    return Status(ErrorCodes::DuplicateKey, sb.str());
-//                } else {
-//                    break;
-//                }
-//            }
-//        }
-//    }
-//
+
+    /*
+     * Duplicate key check
+     */
+    if (!dupsAllowed) {
+        for (i = 0; i < node->num_keys; i++) {
+            cmp = entry.key.woCompare(node->keys[i].getBSON(),
+                                          ordering, false);
+            if (cmp == 0) {
+                if (node->keys[i].loc != entry.loc.repr()) {
+                    StringBuilder sb;
+                    sb << "Duplicate key error ";
+                    sb << "dup key: " << entry.key.toString();
+                    return Status(ErrorCodes::DuplicateKey, sb.str());
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
     /*
      * There is place for new value
      */

@@ -438,20 +438,58 @@ void PmseCursor::seekEndCursor() {
     CursorObject endCursor;
     bool found;
 
-            if (!_endState || !_tree->_root)
-                return;
+    if (!_endState || !_tree->_root)
+        return;
 
-            found = lower_bound(_endState->query, endCursor);
-            if(_locateFoundDataEnd) {
-                _endPositionIsDataEnd = true;
-                _locateFoundDataEnd = false;
+    found = lower_bound(_endState->query, endCursor);
+    if(_locateFoundDataEnd) {
+        _endPositionIsDataEnd = true;
+        _locateFoundDataEnd = false;
+    }
+    if (!_forward) {
+        std::cout << "seekEndCursor, !forward, end cursor="<< endCursor.index << std::endl;
+        if(_endPosition)
+            std::cout <<"_endPos exist" <<std::endl;
+        if(found)
+        {
+            std::cout <<"found" <<std::endl;
+        }
+        std::cout << "endptr="<< endCursor.node.raw_ptr()->off <<std::endl;
+        std::cout << "_first="<< _first.raw_ptr()->off <<std::endl;
+
+        // lower_bound lands us on or after query. Reverse cursors must be on or before.
+        if( (endCursor.node == _first) && (endCursor.index == 0) ) {
+
+            std::cout <<"node=first" <<std::endl;
+
+            _endPositionIsDataEnd = true;
+            return;
+        }
+        int cmp;
+            cmp = (endCursor.node->keys[endCursor.index]).getBSON().woCompare(_endState->query.key,_ordering, false);
+            if(cmp==0){
+                if((endCursor.node->keys[endCursor.index]).loc<_endState->query.loc.repr())
+                    cmp = -1;
+                else if((endCursor.node->keys[endCursor.index]).loc > _endState->query.loc.repr())
+                    cmp = 1;
+                else cmp = 0;
             }
-            if (!_forward) {
-                // lower_bound lands us on or after query. Reverse cursors must be on or before.
-                if( (endCursor.node == _first) && (endCursor.index == 0) ) {
-                    _endPositionIsDataEnd = true;
-                    return;
+        if(cmp>0) {
+            if (endCursor.index > 0) {
+                endCursor.index--;
+            } else {
+                /*
+                 * Move to prev node - if it exist
+                 */
+                if (endCursor.node->previous != nullptr) {
+                    endCursor.node = endCursor.node->previous;
+                    endCursor.index = endCursor.node->num_keys - 1;
+                } else {
+                    endCursor.node = nullptr;
                 }
+            }
+        }
+
 //                if (it == _data.end() || _data.value_comp().compare(*it, _endState->query) > 0) {
 //                    if (it == _data.begin()) {
 //                        it = _data.end();  // all existing data in range.
@@ -459,17 +497,17 @@ void PmseCursor::seekEndCursor() {
 //                        --it;
 //                    }
 //                }
-            }
+    }
 
 //            if (it != _data.end())
 //                dassert(compareKeys(it->key, _endState->query.key) >= 0);
-            if(found)
-            {
-                _endPosition = IndexKeyEntry(endCursor.node->keys[endCursor.index].getBSON(),RecordId(endCursor.node->keys[endCursor.index].loc));
+    if(found)
+    {
+        _endPosition = IndexKeyEntry(endCursor.node->keys[endCursor.index].getBSON(),RecordId(endCursor.node->keys[endCursor.index].loc));
 //                _endPosition.get().key = endCursor.node->keys[endCursor.index].getBSON();
 //                _endPosition.get().loc. = RecordId(endCursor.node->keys[endCursor.index].loc);
-            }
-        }
+    }
+}
 
 
 void PmseCursor::setEndPosition(const BSONObj& key, bool inclusive){
@@ -805,6 +843,8 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const BSONObj& key,
     std::shared_lock<nvml::obj::shared_mutex> lock(_tree->_pmutex);
     std::cout <<"seek key = "<< key.toString()<<" type="<<key.firstElementType()<<std::endl;// <<" cmp="<<cmp <<std::endl;
     std::cout <<"inclusive = " << inclusive << std::endl;
+    if (!_tree->_root)
+        return {};
     if (key.isEmpty()) {
 
         if(inclusive){
@@ -1068,6 +1108,8 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const IndexSeekPoint& seekPoint,
                                                 RequestedInfo parts = kKeyAndLoc) {
     boost::optional<IndexKeyEntry> entry;
     std::cout << "seek2" << std::endl;
+    if (!_tree->_root)
+        return {};
     const BSONObj query = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
     locate(query, _forward ? RecordId::min() : RecordId::max());
 //    _lastMoveWasRestore = false;

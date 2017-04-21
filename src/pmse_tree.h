@@ -144,9 +144,9 @@ class PmseTree {
  public:
     Status insert(pool_base pop, IndexKeyEntry& entry,
                   const BSONObj& _ordering, bool dupsAllowed);
-//    bool remove(pool_base pop, BSONObj& key, const RecordId& loc,
+//    bool remove(pool_base pop, IndexKeyEntry& entry,
 //                bool dupsAllowed, const BSONObj& _ordering, OperationContext* txn);
-//
+
 //    Status dupKeyCheck(pool_base pop, BSONObj& key, const RecordId& loc);
     p<int64_t> _records = 0;
 
