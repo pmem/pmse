@@ -49,11 +49,20 @@ namespace mongo {
 
 int64_t IndexKeyEntry_PM::compareEntries(IndexKeyEntry& leftEntry, IndexKeyEntry_PM& rightEntry, const BSONObj& ordering){
     int cmp;
+
+    /*std::cout <<"compare entries: left="<<leftEntry.loc.repr()<<std::endl;
+    std::cout << " right="<<rightEntry.loc <<std::endl;
+
+
+    std::cout << " ordering="<<ordering.toString() <<std::endl;
+    std::cout <<"compare entries: left="<<leftEntry.key.toString()<<std::endl;
+    std::cout << " right="<<rightEntry.getBSON().toString() <<std::endl;
+*/
     cmp = leftEntry.key.woCompare(rightEntry.getBSON(), ordering, false);
     if(cmp!=0)
         return cmp;
     //when entries keys are equal, compare RecordID
-    std::cout <<"compare entries: equal keys, left="<<leftEntry.loc.repr()<< " right="<<rightEntry.loc <<std::endl;
+  //  std::cout <<"compare entries: equal keys, left="<<leftEntry.loc.repr()<< " right="<<rightEntry.loc <<std::endl;
     if(leftEntry.loc.repr()<rightEntry.loc)
         return -1;
     else if(leftEntry.loc.repr() > rightEntry.loc)
@@ -106,18 +115,39 @@ BSONObj IndexKeyEntry_PM::getBSON() {
 //    return Status::OK();
 //}
 //
-//bool PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
-//                      bool dupsAllowed, const BSONObj& ordering,
-//                      OperationContext* txn = nullptr) {
-//    persistent_ptr<PmseTreeNode> node;
+bool PmseTree::remove(pool_base pop, IndexKeyEntry& entry,
+                      bool dupsAllowed, const BSONObj& ordering,
+                      OperationContext* txn = nullptr) {
+    persistent_ptr<PmseTreeNode> node;
 //    persistent_ptr<PmseTreeNode> tempNode;
 //    RecordId key_record;
-//    uint64_t i;
-//    int64_t cmp;
-//    stdx::unique_lock<nvml::obj::shared_mutex> lock(_pmutex);
-//    _ordering = ordering;
+    uint64_t i;
+    int64_t cmp;
+    stdx::unique_lock<nvml::obj::shared_mutex> lock(_pmutex);
+    _ordering = ordering;
 //    // find node with key
-//    node = locateLeafWithKey(_root, key, _ordering);
+    if(!_root)
+        return false;
+    node = locateLeafWithKeyPM(_root, entry, _ordering);
+
+    for(uint64_t j=0;j<node->num_keys;j++)
+    {
+        std::cout <<"remove found node key["<<j<<"]="<<(node->keys[j]).getBSON().toString() <<std::endl;
+    }
+
+    for (i = 0; i < node->num_keys; i++) {
+//        cmp = entry.key.woCompare(node->keys[i].getBSON(),
+//                                      ordering, false);
+        cmp = IndexKeyEntry_PM::compareEntries(entry, node->keys[i], _ordering);
+        if (cmp == 0) {
+            break;
+        }
+    }
+    //not found
+    if(i==node->num_keys) {
+        std::cout << "remove: looked key="<<entry.key.toString() <<" not found" << std::endl;
+        return false;
+    }
 //    tempNode = node;
 //    // find place in node
 //    for (i = 0; i < node->num_keys; i++) {
@@ -208,399 +238,408 @@ BSONObj IndexKeyEntry_PM::getBSON() {
 //     */
 //    if (txn)
 //        txn->recoveryUnit()->registerChange(new RemoveIndexChange(pop, key, loc, dupsAllowed, ordering));
-//
-//    _root = deleteEntry(pop, key, node, i);
-//    return true;
-//}
-//
-//persistent_ptr<PmseTreeNode> PmseTree::deleteEntry(pool_base pop,
-//                                                   BSONObj& key,
-//                                                   persistent_ptr<PmseTreeNode> node,
-//                                                   uint64_t index) {
-//    uint64_t min_keys;
-//    int64_t neighbor_index;
-//    int64_t k_prime_index;
-//    BSONObj_PM k_prime;
-//    uint64_t capacity;
-//    persistent_ptr<PmseTreeNode> neighbor;
-//
-//    // Remove key and pointer from node.
-//    node = removeEntryFromNode(key, node, index);
-//
-//    if (node == _root) {
-//        return adjustRoot(_root);
-//    }
-//    /* Case:  deletion from a node below the root.
-//     * (Rest of function body.)
-//     */
-//
-//    /* Determine minimum allowable size of node,
-//     * to be preserved after deletion.
-//     */
-//    min_keys = node->is_leaf ? cut(TREE_ORDER - 1) : cut(TREE_ORDER) - 1;
-//    /* Case:  node stays at or above minimum.
-//     * (The simple case.)
-//     */
-//
-//    if (node->num_keys >= min_keys)
-//        return _root;
-//
-//    /* Case:  node falls below minimum.
-//     * Either coalescence or redistribution
-//     * is needed.
-//     */
-//
-//    /* Find the appropriate neighbor node with which
-//     * to coalesce.
-//     * Also find the key (k_prime) in the parent
-//     * between the pointer to node n and the pointer
-//     * to the neighbor.
-//     */
-//    neighbor_index = getNeighborIndex(node);
-//    k_prime_index = neighbor_index == -1 ? 0 : neighbor_index;
-//    k_prime = node->parent->keys[k_prime_index];
-//    neighbor = neighbor_index == -1 ?
-//               node->parent->children_array[1] :
-//               node->parent->children_array[neighbor_index];
-//
-//    capacity = node->is_leaf ? TREE_ORDER : TREE_ORDER - 1;
-//
-//    /* Coalescence. */
-//    if (neighbor->num_keys + node->num_keys < capacity)
-//        return coalesceNodes(pop, _root, node, neighbor, neighbor_index, k_prime);
-//    else
-//        return redistributeNodes(pop, _root, node, neighbor, neighbor_index,
-//                                 k_prime_index, k_prime);
-//}
-//
-///* Redistributes entries between two nodes when
-// * one has become too small after deletion
-// * but its neighbor is too big to append the
-// * small node's entries without exceeding the
-// * maximum
-// */
-//persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
-//                pool_base pop, persistent_ptr<PmseTreeNode> root,
-//                persistent_ptr<PmseTreeNode> n,
-//                persistent_ptr<PmseTreeNode> neighbor, int64_t neighbor_index,
-//                int64_t k_prime_index, BSONObj_PM k_prime) {
-//    uint64_t i;
-//    persistent_ptr<PmseTreeNode> tmp;
-//
-//    /* Case: n has a neighbor to the left.
-//     * Pull the neighbor's last key-pointer pair over
-//     * from the neighbor's right end to n's left end.
-//     */
-//    if (neighbor_index != -1) {
-//        if (!n->is_leaf) {
-//            n->children_array[n->num_keys + 1] = n->children_array[n->num_keys];
-//            for (i = n->num_keys; i > 0; i--) {
-//                n->keys[i] = n->keys[i - 1];
-//                n->children_array[i] = n->children_array[i - 1];
-//            }
-//        } else {
-//            for (i = n->num_keys; i > 0; i--) {
-//                n->keys[i] = n->keys[i - 1];
+std::cout << "remove: looked key="<<entry.key.toString() <<" rec="<<entry.loc<<" found key="<<node->keys[i].getBSON().toString()<<" rec="<< node->keys[i].loc <<std::endl;
+    _root = deleteEntry(pop, entry, node, i);
+    return true;
+}
+
+persistent_ptr<PmseTreeNode> PmseTree::deleteEntry(pool_base pop,
+                                                   IndexKeyEntry& key,
+                                                   persistent_ptr<PmseTreeNode> node,
+                                                   uint64_t index) {
+    uint64_t min_keys;
+    int64_t neighbor_index;
+    int64_t k_prime_index;
+    IndexKeyEntry_PM k_prime;
+    uint64_t capacity;
+    persistent_ptr<PmseTreeNode> neighbor;
+
+    // Remove key and pointer from node.
+    node = removeEntryFromNode(key, node, index);
+
+    if (node == _root) {
+        return adjustRoot(_root);
+    }
+    /* Case:  deletion from a node below the root.
+     * (Rest of function body.)
+     */
+
+    /* Determine minimum allowable size of node,
+     * to be preserved after deletion.
+     */
+    min_keys = node->is_leaf ? cut(TREE_ORDER - 1) : cut(TREE_ORDER) - 1;
+    /* Case:  node stays at or above minimum.
+     * (The simple case.)
+     */
+
+    if (node->num_keys >= min_keys)
+        return _root;
+
+    /* Case:  node falls below minimum.
+     * Either coalescence or redistribution
+     * is needed.
+     */
+
+    /* Find the appropriate neighbor node with which
+     * to coalesce.
+     * Also find the key (k_prime) in the parent
+     * between the pointer to node n and the pointer
+     * to the neighbor.
+     */
+    neighbor_index = getNeighborIndex(node);
+    k_prime_index = neighbor_index == -1 ? 0 : neighbor_index;
+    k_prime = node->parent->keys[k_prime_index];
+    neighbor = neighbor_index == -1 ?
+               node->parent->children_array[1] :
+               node->parent->children_array[neighbor_index];
+
+    capacity = node->is_leaf ? TREE_ORDER : TREE_ORDER - 1;
+
+    /* Coalescence. */
+    if (neighbor->num_keys + node->num_keys < capacity)
+        return coalesceNodes(pop, _root, node, neighbor, neighbor_index, k_prime);
+    else
+        return redistributeNodes(pop, _root, node, neighbor, neighbor_index,
+                                 k_prime_index, k_prime);
+}
+
+/* Redistributes entries between two nodes when
+ * one has become too small after deletion
+ * but its neighbor is too big to append the
+ * small node's entries without exceeding the
+ * maximum
+ */
+persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
+                pool_base pop, persistent_ptr<PmseTreeNode> root,
+                persistent_ptr<PmseTreeNode> n,
+                persistent_ptr<PmseTreeNode> neighbor, int64_t neighbor_index,
+                int64_t k_prime_index, IndexKeyEntry_PM k_prime) {
+    uint64_t i;
+    persistent_ptr<PmseTreeNode> tmp;
+    std::cout << "redistributeNodes"<<std::endl;
+    /* Case: n has a neighbor to the left.
+     * Pull the neighbor's last key-pointer pair over
+     * from the neighbor's right end to n's left end.
+     */
+    if (neighbor_index != -1) {
+        if (!n->is_leaf) {
+            n->children_array[n->num_keys + 1] = n->children_array[n->num_keys];
+            for (i = n->num_keys; i > 0; i--) {
+                n->keys[i] = n->keys[i - 1];
+                n->children_array[i] = n->children_array[i - 1];
+            }
+        } else {
+            for (i = n->num_keys; i > 0; i--) {
+                n->keys[i] = n->keys[i - 1];
 //                n->values_array[i] = n->values_array[i - 1];
-//            }
-//        }
-//        if (!n->is_leaf) {
-//            n->children_array[0] = neighbor->children_array[neighbor->num_keys];
-//            tmp = n->children_array[0];
-//            tmp->parent = n;
-//            neighbor->children_array[neighbor->num_keys] = nullptr;
-//            n->keys[0] = k_prime;
-//            n->parent->keys[k_prime_index].data =
-//                            neighbor->keys[neighbor->num_keys - 1].data;
-//        } else {
+            }
+        }
+        if (!n->is_leaf) {
+            n->children_array[0] = neighbor->children_array[neighbor->num_keys];
+            tmp = n->children_array[0];
+            tmp->parent = n;
+            neighbor->children_array[neighbor->num_keys] = nullptr;
+            n->keys[0] = k_prime;
+            n->parent->keys[k_prime_index].data =
+                            neighbor->keys[neighbor->num_keys - 1].data;
+        } else {
 //            n->values_array[0] = neighbor->values_array[neighbor->num_keys - 1];
-//            n->keys[0] = neighbor->keys[neighbor->num_keys - 1];
-//
-//            BSONObj_PM bsonPM;
-//            persistent_ptr<char> obj;
+            n->keys[0] = neighbor->keys[neighbor->num_keys - 1];
+
+            IndexKeyEntry_PM entryPM;
+            persistent_ptr<char> obj;
 //            transaction::exec_tx(pop, [&obj, n] {
-//                obj = pmemobj_tx_alloc(n->keys[0].getBSON().objsize(), 1);
-//                memcpy(static_cast<void*>(obj.get()),
-//                       n->keys[0].getBSON().objdata(),
-//                       n->keys[0].getBSON().objsize());
+                obj = pmemobj_tx_alloc(n->keys[0].getBSON().objsize(), 1);
+                memcpy(static_cast<void*>(obj.get()),
+                       n->keys[0].getBSON().objdata(),
+                       n->keys[0].getBSON().objsize());
 //            });
-//
-//            bsonPM = (n->parent->keys[k_prime_index]);
-//            if (bsonPM.data.raw().off != 0) {
-//                pmemobj_tx_free(bsonPM.data.raw());
-//            }
-//            bsonPM.data = obj;
-//            n->parent->keys[k_prime_index].data = bsonPM.data;
-//        }
-//    } else {
-//        /*
-//         * Case: n is the leftmost child.
-//         * Take a key-pointer pair from the neighbor to the right.
-//         * Move the neighbor's leftmost key-pointer pair
-//         * to n's rightmost position.
-//         */
-//        if (n->is_leaf) {
-//            n->keys[n->num_keys] = neighbor->keys[0];
+
+            entryPM = (n->parent->keys[k_prime_index]);
+            if (entryPM.data.raw().off != 0) {
+                pmemobj_tx_free(entryPM.data.raw());
+            }
+            entryPM.data = obj;
+            n->parent->keys[k_prime_index].data = entryPM.data;
+            n->parent->keys[k_prime_index].loc = entryPM.loc;
+
+        }
+    } else {
+        /*
+         * Case: n is the leftmost child.
+         * Take a key-pointer pair from the neighbor to the right.
+         * Move the neighbor's leftmost key-pointer pair
+         * to n's rightmost position.
+         */
+        if (n->is_leaf) {
+            n->keys[n->num_keys] = neighbor->keys[0];
 //            n->values_array[n->num_keys] = neighbor->values_array[0];
-//
-//            BSONObj_PM bsonPM;
-//            persistent_ptr<char> obj;
+
+            IndexKeyEntry_PM entryPM;
+            persistent_ptr<char> obj;
 //            transaction::exec_tx(pop, [&obj, neighbor] {
-//                obj = pmemobj_tx_alloc(neighbor->keys[1].getBSON().objsize(), 1);
-//                memcpy(static_cast<void*>(obj.get()),
-//                       neighbor->keys[1].getBSON().objdata(),
-//                       neighbor->keys[1].getBSON().objsize());
+                obj = pmemobj_tx_alloc(neighbor->keys[1].getBSON().objsize(), 1);
+                memcpy(static_cast<void*>(obj.get()),
+                       neighbor->keys[1].getBSON().objdata(),
+                       neighbor->keys[1].getBSON().objsize());
 //            });
-//
-//            bsonPM = (n->parent->keys[k_prime_index]);
-//            if (bsonPM.data.raw().off != 0) {
-//                pmemobj_tx_free(bsonPM.data.raw());
-//            }
-//
-//            bsonPM.data = obj;
-//
-//            n->parent->keys[k_prime_index].data = bsonPM.data;
-//        } else {
-//            n->keys[n->num_keys] = k_prime;
-//            n->children_array[n->num_keys + 1] = neighbor->children_array[0];
-//            tmp = n->children_array[n->num_keys + 1];
-//            tmp->parent = n;
-//
-//            BSONObj_PM bsonPM;
-//            bsonPM = (n->parent->keys[k_prime_index]);
-//
-//            n->parent->keys[k_prime_index].data = neighbor->keys[0].data;
-//        }
-//        if (!n->is_leaf) {
-//            for (i = 0; i < neighbor->num_keys - 1; i++) {
-//                neighbor->keys[i] = neighbor->keys[i + 1];
-//                neighbor->children_array[i] = neighbor->children_array[i + 1];
-//            }
-//            neighbor->children_array[i] = neighbor->children_array[i + 1];
-//        } else {
-//            for (i = 0; i < neighbor->num_keys - 1; i++) {
-//                neighbor->keys[i] = neighbor->keys[i + 1];
+
+            entryPM = (n->parent->keys[k_prime_index]);
+            if (entryPM.data.raw().off != 0) {
+                pmemobj_tx_free(entryPM.data.raw());
+            }
+
+            entryPM.data = obj;
+
+            n->parent->keys[k_prime_index].data = entryPM.data;
+            n->parent->keys[k_prime_index].loc = entryPM.loc;
+        } else {
+            n->keys[n->num_keys] = k_prime;
+            n->children_array[n->num_keys + 1] = neighbor->children_array[0];
+            tmp = n->children_array[n->num_keys + 1];
+            tmp->parent = n;
+
+            IndexKeyEntry_PM entryPM;
+            entryPM = (n->parent->keys[k_prime_index]);
+
+            n->parent->keys[k_prime_index].data = neighbor->keys[0].data;
+            n->parent->keys[k_prime_index].loc = neighbor->keys[0].loc;
+        }
+        if (!n->is_leaf) {
+            for (i = 0; i < neighbor->num_keys - 1; i++) {
+                neighbor->keys[i] = neighbor->keys[i + 1];
+                neighbor->children_array[i] = neighbor->children_array[i + 1];
+            }
+            neighbor->children_array[i] = neighbor->children_array[i + 1];
+        } else {
+            for (i = 0; i < neighbor->num_keys - 1; i++) {
+                neighbor->keys[i] = neighbor->keys[i + 1];
 //                neighbor->values_array[i] = neighbor->values_array[i + 1];
-//            }
-//        }
-//    }
-//
-//    /*
-//     * n now has one more key and one more pointer;
-//     * the neighbor has one fewer of each.
-//     */
-//    n->num_keys++;
-//    neighbor->num_keys--;
-//    return root;
-//}
-//
-///*
-// * Coalesces a node that has become
-// * too small after deletion
-// * with a neighboring node that
-// * can accept the additional entries
-// * without exceeding the maximum.
-// */
-//persistent_ptr<PmseTreeNode> PmseTree::coalesceNodes(
-//                pool_base pop, persistent_ptr<PmseTreeNode> root,
-//                persistent_ptr<PmseTreeNode> n,
-//                persistent_ptr<PmseTreeNode> neighbor, int64_t neighbor_index,
-//                BSONObj_PM k_prime) {
-//    uint64_t i, j, neighbor_insertion_index, n_end;
-//    persistent_ptr<PmseTreeNode> tmp;
-//    BSONObj k_prime_temp;
-//
-//    // Swap neighbor with node if node is on the extreme left and neighbor is to its right.
-//    if (neighbor_index == -1) {
-//        tmp = n;
-//        n = neighbor;
-//        neighbor = tmp;
-//    }
-//
-//    /*
-//     * Starting point in the neighbor for copying
-//     * keys and pointers from n.
-//     * Recall that n and neighbor have swapped places
-//     * in the special case of n being a leftmost child.
-//     */
-//    neighbor_insertion_index = neighbor->num_keys;
-//
-//    /*
-//     * Case:  nonleaf node.
-//     * Append k_prime and the following pointer.
-//     * Append all pointers and keys from the neighbor.
-//     */
-//    if (!n->is_leaf) {
-//        /*
-//         * Append k_prime.
-//         */
-//        BSONObj_PM bsonPM;
+            }
+        }
+    }
+
+    /*
+     * n now has one more key and one more pointer;
+     * the neighbor has one fewer of each.
+     */
+    n->num_keys++;
+    neighbor->num_keys--;
+    return root;
+}
+
+/*
+ * Coalesces a node that has become
+ * too small after deletion
+ * with a neighboring node that
+ * can accept the additional entries
+ * without exceeding the maximum.
+ */
+persistent_ptr<PmseTreeNode> PmseTree::coalesceNodes(
+                pool_base pop, persistent_ptr<PmseTreeNode> root,
+                persistent_ptr<PmseTreeNode> n,
+                persistent_ptr<PmseTreeNode> neighbor, int64_t neighbor_index,
+                IndexKeyEntry_PM k_prime) {
+    uint64_t i, j, neighbor_insertion_index, n_end;
+    persistent_ptr<PmseTreeNode> tmp;
+    IndexKeyEntry k_prime_temp(k_prime.getBSON(),RecordId((k_prime).loc));
+std::cout << "coalesceNodes"<<std::endl;
+    // Swap neighbor with node if node is on the extreme left and neighbor is to its right.
+    if (neighbor_index == -1) {
+        tmp = n;
+        n = neighbor;
+        neighbor = tmp;
+    }
+
+    /*
+     * Starting point in the neighbor for copying
+     * keys and pointers from n.
+     * Recall that n and neighbor have swapped places
+     * in the special case of n being a leftmost child.
+     */
+    neighbor_insertion_index = neighbor->num_keys;
+
+    /*
+     * Case:  nonleaf node.
+     * Append k_prime and the following pointer.
+     * Append all pointers and keys from the neighbor.
+     */
+    if (!n->is_leaf) {
+        /*
+         * Append k_prime.
+         */
+//        IndexKeyEntry_PM entryPM;
 //        persistent_ptr<char> obj;
 //        obj = pmemobj_tx_alloc(k_prime.getBSON().objsize(), 1);
 //        memcpy(static_cast<void*>(obj.get()), k_prime.getBSON().objdata(),
 //               k_prime.getBSON().objsize());
 //
-//        bsonPM.data = obj;
-//        neighbor->keys[neighbor_insertion_index].data = bsonPM.data;  // Why we assign to bsonPM and later to another?
-//        neighbor->num_keys++;
-//        n_end = n->num_keys;
-//
-//        for (i = neighbor_insertion_index + 1, j = 0; j < n_end; i++, j++) {
-//            neighbor->keys[i] = n->keys[j];
-//            neighbor->children_array[i] = n->children_array[j];
-//            neighbor->num_keys++;
-//            n->num_keys--;
-//        }
-//
-//        /*
-//         * The number of pointers is always
-//         * one more than the number of keys.
-//         */
-//        neighbor->children_array[i] = n->children_array[j];
-//
-//         // All children must now point up to the same parent.
-//        for (i = 0; i < neighbor->num_keys + 1; i++) {
-//            tmp = neighbor->children_array[i];
-//            tmp->parent = neighbor;
-//        }
-//    } else {
-//        /* In a leaf, append the keys and pointers of
-//         * n to the neighbor.
-//         * Set the neighbor's last pointer to point to
-//         * what had been n's right neighbor.
-//         */
-//        for (i = neighbor_insertion_index, j = 0; j < n->num_keys; i++, j++) {
-//            neighbor->keys[i] = n->keys[j];
+//        entryPM.data = obj;
+        neighbor->keys[neighbor_insertion_index].data = pmemobj_tx_alloc(k_prime.getBSON().objsize(), 1);
+        memcpy(static_cast<void*>(neighbor->keys[neighbor_insertion_index].data.get()), k_prime.getBSON().objdata(),
+               k_prime.getBSON().objsize());
+        (neighbor->keys[neighbor_insertion_index]).loc = k_prime.loc;
+        neighbor->num_keys++;
+        n_end = n->num_keys;
+
+        for (i = neighbor_insertion_index + 1, j = 0; j < n_end; i++, j++) {
+            neighbor->keys[i] = n->keys[j];
+            neighbor->children_array[i] = n->children_array[j];
+            neighbor->num_keys++;
+            n->num_keys--;
+        }
+
+        /*
+         * The number of pointers is always
+         * one more than the number of keys.
+         */
+        neighbor->children_array[i] = n->children_array[j];
+
+         // All children must now point up to the same parent.
+        for (i = 0; i < neighbor->num_keys + 1; i++) {
+            tmp = neighbor->children_array[i];
+            tmp->parent = neighbor;
+        }
+    } else {
+        /* In a leaf, append the keys and pointers of
+         * n to the neighbor.
+         * Set the neighbor's last pointer to point to
+         * what had been n's right neighbor.
+         */
+        for (i = neighbor_insertion_index, j = 0; j < n->num_keys; i++, j++) {
+            neighbor->keys[i] = n->keys[j];
 //            neighbor->values_array[i] = n->values_array[j];
-//            neighbor->num_keys++;
-//        }
-//        if (n->next) {
-//            n->next->previous = neighbor;
-//        }
-//        neighbor->next = n->next;
-//    }
-//
+            neighbor->num_keys++;
+        }
+        if (n->next) {
+            n->next->previous = neighbor;
+        }
+        neighbor->next = n->next;
+    }
+
 //    k_prime_temp = k_prime.getBSON();
-//    if (neighbor_index == -1) {
-//        for (i = 0; i < n->parent->num_keys; i++) {
+    if (neighbor_index == -1) {
+        for (i = 0; i < n->parent->num_keys; i++) {
+            int cmp = IndexKeyEntry_PM::compareEntries(k_prime_temp, n->parent->keys[i], _ordering);
 //            int cmp = k_prime_temp.woCompare(n->parent->keys[i].getBSON(),
 //                            _ordering, false);
-//            if (cmp == 0) {
-//                break;
-//            }
-//        }
-//    } else {
-//       i = neighbor_index;
-//    }
-//    root = deleteEntry(pop, k_prime_temp, n->parent, i);
-//
-//    delete_persistent<BSONObj_PM[TREE_ORDER]>(n->keys);
+            if (cmp == 0) {
+                break;
+            }
+        }
+    } else {
+       i = neighbor_index;
+    }
+//    k_prime_temp = IndexKeyEntry(k_prime.getBSON(),RecordId((k_prime).loc));
+    root = deleteEntry(pop, k_prime_temp, n->parent, i);
+
+    delete_persistent<IndexKeyEntry_PM[TREE_ORDER]>(n->keys);
 //    if (n->is_leaf) {
 //        delete_persistent<RecordId[TREE_ORDER]>(n->values_array);
 //    }
-//
-//    delete_persistent<PmseTreeNode>(n);
-//
-//    return root;
-//}
-//
-//// DELETION.
-//
-///* Utility function for deletion.  Retrieves
-// * the index of a node's nearest neighbor (sibling)
-// * to the left if one exists.  If not (the node
-// * is the leftmost child), returns -1 to signify
-// * this special case.
-// */
-//int64_t PmseTree::getNeighborIndex(persistent_ptr<PmseTreeNode> node) {
-//    /* Return the index of the key to the left
-//     * of the pointer in the parent pointing
-//     * to n.
-//     * If n is the leftmost child, this means
-//     * return -1.
-//     */
-//    for (uint64_t i = 0; i <= node->parent->num_keys; i++)
-//        if (node->parent->children_array[i] == node)
-//            return i - 1;
-//
-//    // Error state.
-//    std::cout << "Error: Search for nonexistent pointer to node in parent.\n"
-//                    << std::endl;
-//    return 0;
-//}
-//
-//persistent_ptr<PmseTreeNode> PmseTree::adjustRoot(
-//                persistent_ptr<PmseTreeNode> root) {
-//    persistent_ptr<PmseTreeNode> new_root;
-//
-//    /* Case: nonempty root.
-//     * Key and pointer have already been deleted,
-//     * so nothing to be done.
-//     */
-//
-//    if (root->num_keys > 0)
-//        return root;
-//    /* Case: empty root.
-//     */
-//
-//    // If it has a child, promote
-//    // the first (only) child
-//    // as the new root.
-//    if (!root->is_leaf) {
-//        new_root = root->children_array[0];
-//        new_root->parent = nullptr;
-//    } else {
-//        // If it is a leaf (has no children),
-//        // then the whole tree is empty.
-//        new_root = nullptr;
-//    }
-//
-//    delete_persistent<BSONObj_PM[TREE_ORDER]>(root->keys);
+
+    delete_persistent<PmseTreeNode>(n);
+
+    return root;
+}
+
+// DELETION.
+
+/* Utility function for deletion.  Retrieves
+ * the index of a node's nearest neighbor (sibling)
+ * to the left if one exists.  If not (the node
+ * is the leftmost child), returns -1 to signify
+ * this special case.
+ */
+int64_t PmseTree::getNeighborIndex(persistent_ptr<PmseTreeNode> node) {
+    /* Return the index of the key to the left
+     * of the pointer in the parent pointing
+     * to n.
+     * If n is the leftmost child, this means
+     * return -1.
+     */
+    for (uint64_t i = 0; i <= node->parent->num_keys; i++)
+        if (node->parent->children_array[i] == node)
+            return i - 1;
+
+    // Error state.
+    std::cout << "Error: Search for nonexistent pointer to node in parent.\n"
+                    << std::endl;
+    return 0;
+}
+
+persistent_ptr<PmseTreeNode> PmseTree::adjustRoot(
+                persistent_ptr<PmseTreeNode> root) {
+    persistent_ptr<PmseTreeNode> new_root;
+
+    /* Case: nonempty root.
+     * Key and pointer have already been deleted,
+     * so nothing to be done.
+     */
+
+    if (root->num_keys > 0)
+        return root;
+    /* Case: empty root.
+     */
+
+    // If it has a child, promote
+    // the first (only) child
+    // as the new root.
+    if (!root->is_leaf) {
+        new_root = root->children_array[0];
+        new_root->parent = nullptr;
+    } else {
+        // If it is a leaf (has no children),
+        // then the whole tree is empty.
+        new_root = nullptr;
+    }
+
+    delete_persistent<IndexKeyEntry_PM[TREE_ORDER]>(root->keys);
 //    delete_persistent<RecordId[TREE_ORDER]>(root->values_array);
-//    delete_persistent<PmseTreeNode>(root);
-//    return new_root;
-//}
-//
-//persistent_ptr<PmseTreeNode> PmseTree::removeEntryFromNode(
-//                BSONObj& key, persistent_ptr<PmseTreeNode> node,
-//                uint64_t index) {
-//    uint64_t i = index, num_pointers;
-//
-//    // Remove the key and shift other keys accordingly.
-//    BSONObj_PM bsonPM;
-//    bsonPM = (node->keys[i]);
-//    pmemobj_tx_free(bsonPM.data.raw());
-//
-//    for (++i; i < node->num_keys; i++) {
-//        node->keys[i - 1] = node->keys[i];
-//    }
-//    // Remove the pointer and shift other pointers accordingly.
-//    i = index;
+    delete_persistent<PmseTreeNode>(root);
+    return new_root;
+}
+
+persistent_ptr<PmseTreeNode> PmseTree::removeEntryFromNode(
+                IndexKeyEntry& key, persistent_ptr<PmseTreeNode> node,
+                uint64_t index) {
+    uint64_t i = index, num_pointers;
+
+    // Remove the key and shift other keys accordingly.
+    IndexKeyEntry_PM entryPM;
+    entryPM = (node->keys[i]);
+    pmemobj_tx_free(entryPM.data.raw());
+
+    for (++i; i < node->num_keys; i++) {
+        node->keys[i - 1] = node->keys[i];
+    }
+    // Remove the pointer and shift other pointers accordingly.
+    i = index;
 //    if (node->is_leaf) {
 //        num_pointers = node->num_keys;
 //        for (++i; i < num_pointers; i++) {
 //            node->values_array[i - 1] = node->values_array[i];
 //        }
 //    } else {
-//        num_pointers = node->num_keys + 1;
-//        i++;  // kfilipek: I don't understand what here is done: i++, next ++i. Why not i+=2?
-//        for (++i; i < num_pointers; i++) {
-//            node->children_array[i - 1] = node->children_array[i];
+        num_pointers = node->num_keys + 1;
+        i++;
+        for (++i; i < num_pointers; i++) {
+            node->children_array[i - 1] = node->children_array[i];
 //        }
-//    }
-//
-//    // Set the other pointers to NULL for tidiness.
-//    if (!node->is_leaf) {
-//        for (i = node->num_keys + 1; i < TREE_ORDER; i++)
-//            node->children_array[i] = nullptr;
-//    }
-//    node->num_keys--;
-//
-//    return node;
-//}
+    }
+
+    // Set the other pointers to NULL for tidiness.
+    if (!node->is_leaf) {
+        for (i = node->num_keys + 1; i < TREE_ORDER; i++)
+            node->children_array[i] = nullptr;
+    }
+    node->num_keys--;
+
+    return node;
+}
 //
 //persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKey(
-//                persistent_ptr<PmseTreeNode> node, BSONObj& key,
+//                persistent_ptr<PmseTreeNode> node, IndexKeyEntry& entry,
 //                const BSONObj& _ordering) {
 //    uint64_t i = 0;;
 //    int64_t cmp;
@@ -665,13 +704,24 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
     if (current == nullptr)
         return current;
 
+
     while (!current->is_leaf) {
         i = 0;
+        for(uint64_t j=0;j<current->num_keys;j++)
+        {
+            std::cout <<"locateLeaf, num Keys:"<<current->num_keys<<" j="<<j<<"="<<(current->keys[j]).getBSON().toString()<<" loc="<<(current->keys[j]).loc <<std::endl;
+        }
         while (i < current->num_keys) {
+
+//            std::cout <<"locateLeaf i="<<i<<std::endl;
+//            std::cout <<"locateLeaf entry="<<entry.key.toString()<<std::endl;
+
             cmp = IndexKeyEntry_PM::compareEntries(entry, current->keys[i], ordering);
-            if (cmp > 0) {
+            std::cout << "locate: cmp="<<cmp <<std::endl;
+            if (cmp >= 0) {
                 i++;
             } else {
+                std::cout << "locate: break:i="<<i <<std::endl;
                 break;
             }
         }

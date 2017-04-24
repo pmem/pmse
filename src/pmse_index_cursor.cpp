@@ -70,35 +70,35 @@ PmseCursor::PmseCursor(OperationContext* txn, bool isForward,
 
 
 
-/*
- * Find leaf which may contain key that we are looking for
- */
-persistent_ptr<PmseTreeNode> PmseCursor::find_leaf(
-                persistent_ptr<PmseTreeNode> node, IndexKeyEntry& entry,
-                const BSONObj& ordering) {
-    uint64_t i;
-    int64_t cmp;
-//    bool wasEqual = false;
-    persistent_ptr<PmseTreeNode> current = node;
-
-    if (current == nullptr)
-        return current;
-    while (!current->is_leaf) {
-        i = 0;
-        while (i < current->num_keys) {
-            cmp = IndexKeyEntry_PM::compareEntries(entry, current->keys[i], ordering);
-            //cmp = key.woCompare(current->keys[i].getBSON(), _ordering, false);
-            if (cmp > 0) {
-                i++;
-            } else {
-                break;
-            }
-        }
-        current = current->children_array[i];
-    }
-
-    return current;
-}
+///*
+// * Find leaf which may contain key that we are looking for
+// */
+//persistent_ptr<PmseTreeNode> PmseCursor::find_leaf(
+//                persistent_ptr<PmseTreeNode> node, IndexKeyEntry& entry,
+//                const BSONObj& ordering) {
+//    uint64_t i;
+//    int64_t cmp;
+////    bool wasEqual = false;
+//    persistent_ptr<PmseTreeNode> current = node;
+//
+//    if (current == nullptr)
+//        return current;
+//    while (!current->is_leaf) {
+//        i = 0;
+//        while (i < current->num_keys) {
+//            cmp = IndexKeyEntry_PM::compareEntries(entry, current->keys[i], ordering);
+//            //cmp = key.woCompare(current->keys[i].getBSON(), _ordering, false);
+//            if (cmp >= 0) {
+//                i++;
+//            } else {
+//                break;
+//            }
+//        }
+//        current = current->children_array[i];
+//    }
+//
+//    return current;
+//}
 
 //void PmseCursor::setEndPosition(const BSONObj& key, bool inclusive) {
 //    uint64_t i;
@@ -290,10 +290,14 @@ bool PmseCursor::lower_bound(IndexKeyEntry entry, CursorObject& cursor) {
 
     while (!current->is_leaf) {
         i = 0;
+        for(uint64_t j=0;j<current->num_keys;j++)
+        {
+            std::cout <<"keys["<<j<<"]="<<(current->keys[j]).getBSON().toString() <<std::endl;
+        }
         while (i < current->num_keys) {
             cmp = IndexKeyEntry_PM::compareEntries(entry, current->keys[i], _ordering);
             std::cout <<"cmp="<<cmp <<std::endl;
-            if (cmp > 0) {
+            if (cmp >= 0) {
                 i++;
             } else {
                 break;
@@ -604,7 +608,14 @@ boost::optional<IndexKeyEntry> PmseCursor::next(
 //        _lastMoveWasRestore = false;
 //    } else {
 //        std::cout <<" next, before advance"<<*_it << std::endl;
+
+    if (_wasRestore) {
+        locate(_cursorKey, RecordId(_cursorId));
+        _wasRestore = false;
+    }
+    else{
         moveToNext();
+    }
         if(!_cursor.node)
             return boost::none;
         std::cout <<" next="<<_cursor.node->keys[_cursor.index].getBSON() << " loc="<<_cursor.node->keys[_cursor.index].loc << std::endl;
@@ -614,7 +625,13 @@ boost::optional<IndexKeyEntry> PmseCursor::next(
 
     if (_isEOF)
         return {};
-
+    if (_cursor.node.raw_ptr()->off != 0) {
+            _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
+            _cursorId = _cursor.node->keys[_cursor.index].loc;
+            // remember next value
+        } else {
+            _eofRestore = true;
+        }
 //    std::cout <<" next return="<<*_it << std::endl;
     return IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),RecordId((_cursor.node->keys[_cursor.index]).loc));
 }
@@ -892,13 +909,13 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const BSONObj& key,
 //        moveToNext();
 //        _wasMoved = true;
 //    }
-//    if (_cursor.node.raw_ptr()->off != 0) {
-//        _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
-//        _cursorId = RecordId(_cursor.node->keys[_cursor.index].loc);
-//        // remember next value
-//    } else {
-//        _eofRestore = true;
-//    }
+    if (_cursor.node.raw_ptr()->off != 0) {
+        _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
+        _cursorId = _cursor.node->keys[_cursor.index].loc;
+        // remember next value
+    } else {
+        _eofRestore = true;
+    }
     return IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),RecordId((_cursor.node->keys[_cursor.index]).loc));
 }
 

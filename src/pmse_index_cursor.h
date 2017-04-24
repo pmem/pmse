@@ -80,9 +80,9 @@ class PmseCursor final : public SortedDataInterface::Cursor {
                                               KeyString::Discriminator discriminator,
                                               RequestedInfo parts);
 
-    persistent_ptr<PmseTreeNode> find_leaf(persistent_ptr<PmseTreeNode> node,
-                                            IndexKeyEntry& entry,
-                                           const BSONObj& _ordering);
+//    persistent_ptr<PmseTreeNode> find_leaf(persistent_ptr<PmseTreeNode> node,
+//                                            IndexKeyEntry& entry,
+//                                           const BSONObj& _ordering);
     bool hasFieldNames(const BSONObj& obj) {
         BSONForEach(e, obj) {
             if (e.fieldName()[0])
@@ -152,7 +152,7 @@ class PmseCursor final : public SortedDataInterface::Cursor {
     };
     boost::optional<EndState> _endState;
     BSONObj _cursorKey;
-    RecordId _cursorId;
+    int64_t _cursorId;
     bool _endPositionIsDataEnd;
     bool _locateFoundDataEnd;
 

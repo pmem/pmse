@@ -120,16 +120,17 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
 void PmseSortedDataInterface::unindex(OperationContext* txn, const BSONObj& key,
                                       const RecordId& loc, bool dupsAllowed) {
     //BSONObj owned = key.getOwned();
-//    IndexKeyEntry entry(key.getOwned(), loc);
-//    try {
-//        transaction::exec_tx(_pm_pool, [this, &entry, dupsAllowed, txn] {
-//            if (_tree->remove(_pm_pool, entry, loc, dupsAllowed,
-//                             _desc->keyPattern(), txn))
-//                --_tree->_records;
-//        });
-//    } catch (std::exception &e) {
-//        log() << e.what();
-//    }
+    IndexKeyEntry entry(key.getOwned(), loc);
+    std::cout << "---------------->unindex: key="<<key.toString() << std::endl;
+    try {
+        transaction::exec_tx(_pm_pool, [this, &entry, dupsAllowed, txn] {
+            if (_tree->remove(_pm_pool, entry, dupsAllowed,
+                             _desc->keyPattern(), txn))
+                --_tree->_records;
+        });
+    } catch (std::exception &e) {
+        log() << e.what();
+    }
 }
 
 Status PmseSortedDataInterface::dupKeyCheck(OperationContext* txn,
