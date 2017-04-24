@@ -130,10 +130,10 @@ bool PmseTree::remove(pool_base pop, IndexKeyEntry& entry,
         return false;
     node = locateLeafWithKeyPM(_root, entry, _ordering);
 
-    for(uint64_t j=0;j<node->num_keys;j++)
-    {
-        std::cout <<"remove found node key["<<j<<"]="<<(node->keys[j]).getBSON().toString() <<std::endl;
-    }
+//    for(uint64_t j=0;j<node->num_keys;j++)
+//    {
+//        std::cout <<"remove found node key["<<j<<"]="<<(node->keys[j]).getBSON().toString() <<std::endl;
+//    }
 
     for (i = 0; i < node->num_keys; i++) {
 //        cmp = entry.key.woCompare(node->keys[i].getBSON(),
@@ -145,7 +145,7 @@ bool PmseTree::remove(pool_base pop, IndexKeyEntry& entry,
     }
     //not found
     if(i==node->num_keys) {
-        std::cout << "remove: looked key="<<entry.key.toString() <<" not found" << std::endl;
+//        std::cout << "remove: looked key="<<entry.key.toString() <<" not found" << std::endl;
         return false;
     }
 //    tempNode = node;
@@ -238,7 +238,7 @@ bool PmseTree::remove(pool_base pop, IndexKeyEntry& entry,
 //     */
 //    if (txn)
 //        txn->recoveryUnit()->registerChange(new RemoveIndexChange(pop, key, loc, dupsAllowed, ordering));
-std::cout << "remove: looked key="<<entry.key.toString() <<" rec="<<entry.loc<<" found key="<<node->keys[i].getBSON().toString()<<" rec="<< node->keys[i].loc <<std::endl;
+//std::cout << "remove: looked key="<<entry.key.toString() <<" rec="<<entry.loc<<" found key="<<node->keys[i].getBSON().toString()<<" rec="<< node->keys[i].loc <<std::endl;
     _root = deleteEntry(pop, entry, node, i);
     return true;
 }
@@ -316,7 +316,7 @@ persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
                 int64_t k_prime_index, IndexKeyEntry_PM k_prime) {
     uint64_t i;
     persistent_ptr<PmseTreeNode> tmp;
-    std::cout << "redistributeNodes"<<std::endl;
+//    std::cout << "redistributeNodes"<<std::endl;
     /* Case: n has a neighbor to the left.
      * Pull the neighbor's last key-pointer pair over
      * from the neighbor's right end to n's left end.
@@ -443,7 +443,7 @@ persistent_ptr<PmseTreeNode> PmseTree::coalesceNodes(
     uint64_t i, j, neighbor_insertion_index, n_end;
     persistent_ptr<PmseTreeNode> tmp;
     IndexKeyEntry k_prime_temp(k_prime.getBSON(),RecordId((k_prime).loc));
-std::cout << "coalesceNodes"<<std::endl;
+//std::cout << "coalesceNodes"<<std::endl;
     // Swap neighbor with node if node is on the extreme left and neighbor is to its right.
     if (neighbor_index == -1) {
         tmp = n;
@@ -689,7 +689,7 @@ persistent_ptr<PmseTreeNode> PmseTree::makeTreeRoot(IndexKeyEntry& entry) {
     n->previous = nullptr;
     n->parent = nullptr;
 
-    std::cout << "Make tree root "<<entry.key.toString() << "pm key="<<(n->keys[0]).getBSON().toString() <<std::endl;
+//    std::cout << "Make tree root "<<entry.key.toString() << "pm key="<<(n->keys[0]).getBSON().toString() <<std::endl;
     return n;
 }
 
@@ -707,21 +707,21 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
 
     while (!current->is_leaf) {
         i = 0;
-        for(uint64_t j=0;j<current->num_keys;j++)
-        {
-            std::cout <<"locateLeaf, num Keys:"<<current->num_keys<<" j="<<j<<"="<<(current->keys[j]).getBSON().toString()<<" loc="<<(current->keys[j]).loc <<std::endl;
-        }
+//        for(uint64_t j=0;j<current->num_keys;j++)
+//        {
+//            std::cout <<"locateLeaf, num Keys:"<<current->num_keys<<" j="<<j<<"="<<(current->keys[j]).getBSON().toString()<<" loc="<<(current->keys[j]).loc <<std::endl;
+//        }
         while (i < current->num_keys) {
 
 //            std::cout <<"locateLeaf i="<<i<<std::endl;
 //            std::cout <<"locateLeaf entry="<<entry.key.toString()<<std::endl;
 
             cmp = IndexKeyEntry_PM::compareEntries(entry, current->keys[i], ordering);
-            std::cout << "locate: cmp="<<cmp <<std::endl;
+//            std::cout << "locate: cmp="<<cmp <<std::endl;
             if (cmp >= 0) {
                 i++;
             } else {
-                std::cout << "locate: break:i="<<i <<std::endl;
+//                std::cout << "locate: break:i="<<i <<std::endl;
                 break;
             }
         }
@@ -1066,10 +1066,10 @@ Status PmseTree::insert(pool_base pop, IndexKeyEntry& entry,
         return status;
     }
 
-    for(uint64_t i=0;i<node->num_keys;i++)
-    {
-        std::cout <<"i="<<i<<"="<<(node->keys[i]).getBSON().toString() <<std::endl;
-    }
+//    for(uint64_t i=0;i<node->num_keys;i++)
+//    {
+//        std::cout <<"i="<<i<<"="<<(node->keys[i]).getBSON().toString() <<std::endl;
+//    }
 
     /*
      * splitting

@@ -119,13 +119,13 @@ class PmseCursor final : public SortedDataInterface::Cursor {
     persistent_ptr<PmseTreeNode> _last;
     const bool _unique;
     persistent_ptr<PmseTree> _tree;
-    BSONType cursorType;
+//    BSONType cursorType;
     /*
      * Marks end position for seek and next. Set by setEndPosition().
      * */
     //BSONObj_PM* _endPosition;
 
-    uint64_t _inf;
+//    uint64_t _inf;
     bool _isEOF = true;
     /*
      * Cursor used for iterating with next until "_endPosition"

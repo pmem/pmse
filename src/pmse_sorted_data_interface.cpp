@@ -121,7 +121,7 @@ void PmseSortedDataInterface::unindex(OperationContext* txn, const BSONObj& key,
                                       const RecordId& loc, bool dupsAllowed) {
     //BSONObj owned = key.getOwned();
     IndexKeyEntry entry(key.getOwned(), loc);
-    std::cout << "---------------->unindex: key="<<key.toString() << std::endl;
+//    std::cout << "---------------->unindex: key="<<key.toString() << std::endl;
     try {
         transaction::exec_tx(_pm_pool, [this, &entry, dupsAllowed, txn] {
             if (_tree->remove(_pm_pool, entry, dupsAllowed,
