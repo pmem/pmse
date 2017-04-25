@@ -106,7 +106,7 @@ class PmseCursor final : public SortedDataInterface::Cursor {
     bool lower_bound(IndexKeyEntry entry, CursorObject& cursor);
 
     bool previous(CursorObject&);
-    bool correctType(BSONObj record);
+//    bool correctType(BSONObj record);
     void moveToNext();
 //    int64_t compareEntries(BSONObj& leftBSON, RecordId& leftLoc, IndexKeyEntry& rightEntry, const BSONObj& ordering);
     bool atOrPastEndPointAfterSeeking();

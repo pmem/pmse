@@ -756,62 +756,62 @@ bool PmseCursor::previous(CursorObject& _cursor) {
 /*
  * Check if types of two BSONObjs are comparable
  */
-bool PmseCursor::correctType(BSONObj record) {
-    bool result = false;
-
-    BSONType typeRecord = record.firstElementType();
-
-    if (cursorType == typeRecord)
-        return true;
-
-    if (cursorType == MinKey || cursorType == MaxKey || cursorType == Undefined
-                    || cursorType == EOO || cursorType == jstNULL) {
-        return true;
-    }
-    switch (cursorType) {
-        case NumberDouble:
-        case NumberInt:
-        case NumberLong:
-        case NumberDecimal:
-        case Array: {
-            if ((typeRecord == NumberDouble) || (typeRecord == NumberInt) ||
-                (typeRecord == NumberLong) ||
-                (typeRecord == NumberDecimal) ||
-                (typeRecord == Array))
-                result = true;
-            break;
-        }
-        case Object: {
-            if (typeRecord == Object)
-                result = true;
-            break;
-        }
-        case String: {
-            if (typeRecord == String)
-                result = true;
-            break;
-        }
-        case jstOID: {
-            if (typeRecord == jstOID)
-                result = true;
-            break;
-        }
-        case Bool: {
-            if (typeRecord == Bool)
-                result = true;
-            break;
-        }
-        case Date: {
-            if (typeRecord == Date)
-                result = true;
-            break;
-        }
-        default: {
-            log() << "not supported";
-        }
-    }
-    return result;
-}
+//bool PmseCursor::correctType(BSONObj record) {
+//    bool result = false;
+//
+//    BSONType typeRecord = record.firstElementType();
+//
+//    if (cursorType == typeRecord)
+//        return true;
+//
+//    if (cursorType == MinKey || cursorType == MaxKey || cursorType == Undefined
+//                    || cursorType == EOO || cursorType == jstNULL) {
+//        return true;
+//    }
+//    switch (cursorType) {
+//        case NumberDouble:
+//        case NumberInt:
+//        case NumberLong:
+//        case NumberDecimal:
+//        case Array: {
+//            if ((typeRecord == NumberDouble) || (typeRecord == NumberInt) ||
+//                (typeRecord == NumberLong) ||
+//                (typeRecord == NumberDecimal) ||
+//                (typeRecord == Array))
+//                result = true;
+//            break;
+//        }
+//        case Object: {
+//            if (typeRecord == Object)
+//                result = true;
+//            break;
+//        }
+//        case String: {
+//            if (typeRecord == String)
+//                result = true;
+//            break;
+//        }
+//        case jstOID: {
+//            if (typeRecord == jstOID)
+//                result = true;
+//            break;
+//        }
+//        case Bool: {
+//            if (typeRecord == Bool)
+//                result = true;
+//            break;
+//        }
+//        case Date: {
+//            if (typeRecord == Date)
+//                result = true;
+//            break;
+//        }
+//        default: {
+//            log() << "not supported";
+//        }
+//    }
+//    return result;
+//}
 
 void PmseCursor::moveToNext() {
     if (_forward) {
