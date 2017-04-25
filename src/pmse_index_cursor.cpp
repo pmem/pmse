@@ -293,7 +293,11 @@ bool PmseCursor::lower_bound(IndexKeyEntry entry, CursorObject& cursor) {
 //            std::cout <<"keys["<<j<<"]="<<(current->keys[j]).getBSON().toString() <<std::endl;
 //        }
         while (i < current->num_keys) {
-            cmp = IndexKeyEntry_PM::compareEntries(entry, current->keys[i], _ordering);
+//            cmp = IndexKeyEntry_PM::compareEntries(entry, current->keys[i], _ordering);
+            IndexEntryComparison c(Ordering::make(_ordering));
+            cmp = c.compare(entry, IndexKeyEntry(current->keys[i].getBSON(),RecordId(current->keys[i].loc)));
+
+
 //            std::cout <<"cmp="<<cmp <<std::endl;
             if (cmp >= 0) {
                 i++;
@@ -1121,27 +1125,29 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const BSONObj& key,
 
 boost::optional<IndexKeyEntry> PmseCursor::seek(const IndexSeekPoint& seekPoint,
                                                 RequestedInfo parts = kKeyAndLoc) {
-    boost::optional<IndexKeyEntry> entry;
-    std::cout << "seek2" << std::endl;
+//    boost::optional<IndexKeyEntry> entry;
+
     if (!_tree->_root)
         return {};
-    const BSONObj query = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
-    //    BSONObj key = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
-//    auto discriminator = RecordId::min();
-//    bool gt = false;
-//
-//
-//    BSONObjIterator lhsIt(query);
-//    while (lhsIt.more()) {
-//        const BSONElement l = lhsIt.next();
-//        BehaviorIfFieldIsEqual lEqBehavior = BehaviorIfFieldIsEqual(l.fieldName()[0]);
-//        if (lEqBehavior) {
-//            if (lEqBehavior == greater) {
-//                gt = true;
-//            }
-//        }
-//    }
     std::shared_lock<nvml::obj::shared_mutex> lock(_tree->_pmutex);
+    const BSONObj query = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
+//    std::cout << "seek2, key="<<query.toString() << std::endl;
+    //    BSONObj key = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
+    auto discriminator = RecordId::min();
+    bool gt = false;
+
+
+    BSONObjIterator lhsIt(query);
+    while (lhsIt.more()) {
+        const BSONElement l = lhsIt.next();
+        BehaviorIfFieldIsEqual lEqBehavior = BehaviorIfFieldIsEqual(l.fieldName()[0]);
+        if (lEqBehavior) {
+            if (lEqBehavior == greater) {
+                gt = true;
+            }
+        }
+    }
+
 //    if(gt)
 //        locate(query, _forward ? RecordId::max() : RecordId::min());
 //    else
@@ -1151,6 +1157,9 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const IndexSeekPoint& seekPoint,
 //    _lastMoveWasRestore = false;
     if (_isEOF)
         return {};
+    if(gt)
+        if(query.woCompare(_cursor.node->keys[_cursor.index].getBSON(), _ordering, false)==0)
+            next(parts);
 //    std::shared_lock<nvml::obj::shared_mutex> lock(_tree->_pmutex);
 //
 //    BSONObj key = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
@@ -1186,6 +1195,7 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const IndexSeekPoint& seekPoint,
     } else {
         _eofRestore = true;
     }
+//    std::cout << "seek2, return="<<(_cursor.node->keys[_cursor.index]).getBSON().toString() << std::endl;
     return IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),RecordId((_cursor.node->keys[_cursor.index]).loc));
 }
 
