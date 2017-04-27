@@ -57,13 +57,12 @@ const uint64_t MIN_END = 1;
 const uint64_t MAX_END = 2;
 
 struct IndexKeyEntry_PM {
-public:
+ public:
     static int64_t compareEntries(IndexKeyEntry& leftEntry, IndexKeyEntry_PM& rightEntry, const BSONObj& ordering);
 
     BSONObj getBSON();
     persistent_ptr<char> data;
     p<int64_t> loc;
-
 };
 
 struct PmseTreeNode {

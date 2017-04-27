@@ -47,18 +47,21 @@
 namespace mongo {
 
 
-int64_t IndexKeyEntry_PM::compareEntries(IndexKeyEntry& leftEntry, IndexKeyEntry_PM& rightEntry, const BSONObj& ordering){
+int64_t IndexKeyEntry_PM::compareEntries(IndexKeyEntry& leftEntry,
+                                         IndexKeyEntry_PM& rightEntry,
+                                         const BSONObj& ordering) {
     int cmp;
 
     cmp = leftEntry.key.woCompare(rightEntry.getBSON(), ordering, false);
-    if(cmp!=0)
+    if (cmp != 0)
         return cmp;
-    //when entries keys are equal, compare RecordID
-    if(leftEntry.loc.repr()<rightEntry.loc)
+    // when entries keys are equal, compare RecordID
+    if (leftEntry.loc.repr() < rightEntry.loc)
         return -1;
-    else if(leftEntry.loc.repr() > rightEntry.loc)
+    else if (leftEntry.loc.repr() > rightEntry.loc)
         return 1;
-    else return 0;
+    else
+        return 0;
 }
 
 BSONObj IndexKeyEntry_PM::getBSON() {
@@ -75,7 +78,7 @@ bool PmseTree::remove(pool_base pop, IndexKeyEntry& entry,
     stdx::unique_lock<nvml::obj::shared_mutex> lock(_pmutex);
     _ordering = ordering;
     // find node with key
-    if(!_root)
+    if (!_root)
         return false;
     node = locateLeafWithKeyPM(_root, entry, _ordering);
 
@@ -85,8 +88,8 @@ bool PmseTree::remove(pool_base pop, IndexKeyEntry& entry,
             break;
         }
     }
-    //not found
-    if(i==node->num_keys) {
+    // not found
+    if (i == node->num_keys) {
         return false;
     }
     _root = deleteEntry(pop, entry, node, i);
@@ -207,7 +210,6 @@ persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
             entryPM.data = obj;
             n->parent->keys[k_prime_index].data = entryPM.data;
             n->parent->keys[k_prime_index].loc = entryPM.loc;
-
         }
     } else {
         /*
@@ -282,7 +284,7 @@ persistent_ptr<PmseTreeNode> PmseTree::coalesceNodes(
                 IndexKeyEntry_PM k_prime) {
     uint64_t i, j, neighbor_insertion_index, n_end;
     persistent_ptr<PmseTreeNode> tmp;
-    IndexKeyEntry k_prime_temp(k_prime.getBSON(),RecordId((k_prime).loc));
+    IndexKeyEntry k_prime_temp(k_prime.getBSON(), RecordId((k_prime).loc));
     // Swap neighbor with node if node is on the extreme left and neighbor is to its right.
     if (neighbor_index == -1) {
         tmp = n;
@@ -500,7 +502,8 @@ Status PmseTree::insertKeyIntoLeaf(persistent_ptr<PmseTreeNode> node,
                                    const BSONObj& _ordering) {
     uint64_t i, insertion_point = 0;
 
-    while (insertion_point < node->num_keys && IndexKeyEntry_PM::compareEntries(entry, node->keys[insertion_point], _ordering) > 0) {
+    while (insertion_point < node->num_keys &&
+                    IndexKeyEntry_PM::compareEntries(entry, node->keys[insertion_point], _ordering) > 0) {
             insertion_point++;
     }
 
@@ -538,7 +541,8 @@ persistent_ptr<PmseTreeNode> PmseTree::splitFullNodeAndInsert(
     persistent_ptr<PmseTreeNode> new_root;
     new_leaf = make_persistent<PmseTreeNode>(true);
     IndexKeyEntry_PM temp_keys_array[TREE_ORDER + 1];
-    while (insertion_index < node->num_keys && IndexKeyEntry_PM::compareEntries(entry, node->keys[insertion_index], _ordering) > 0) {
+    while (insertion_index < node->num_keys &&
+                    IndexKeyEntry_PM::compareEntries(entry, node->keys[insertion_index], _ordering) > 0) {
        insertion_index++;
     }
     split = cut(TREE_ORDER);
@@ -651,7 +655,8 @@ persistent_ptr<PmseTreeNode> PmseTree::insertToNodeAfterSplit(
 
     temp_children_array[left_index + 1] = right;
     (temp_keys_array[left_index]).data = pmemobj_tx_alloc(new_key.getBSON().objsize(), 1);
-    memcpy(static_cast<void*>((temp_keys_array[left_index]).data.get()), new_key.data.get(), new_key.getBSON().objsize());
+    memcpy(static_cast<void*>((temp_keys_array[left_index]).data.get()),
+                               new_key.data.get(), new_key.getBSON().objsize());
     (temp_keys_array[left_index]).loc = new_key.loc;
 
     split = cut(TREE_ORDER + 1);
@@ -694,7 +699,6 @@ persistent_ptr<PmseTreeNode> PmseTree::insertIntoNodeParent(
                 persistent_ptr<PmseTreeNode> left, IndexKeyEntry_PM& key,
                 persistent_ptr<PmseTreeNode> right) {
     persistent_ptr<PmseTreeNode> parent = left->parent;
-    //BSONObj_PM newKey;
     uint64_t left_index;
     /*
      * Check if parent exist. If not, create new one.
