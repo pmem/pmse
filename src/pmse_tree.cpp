@@ -75,12 +75,13 @@ bool PmseTree::remove(pool_base pop, IndexKeyEntry& entry,
     persistent_ptr<PmseTreeNode> node;
     uint64_t i;
     int64_t cmp;
+    std::list<LocksPtr> locks;
     stdx::unique_lock<nvml::obj::shared_mutex> lock(_pmutex);
     _ordering = ordering;
     // find node with key
     if (!_root)
         return false;
-    node = locateLeafWithKeyPM(_root, entry, _ordering);
+    node = locateLeafWithKeyPM(_root, entry, _ordering, locks);
 
     for (i = 0; i < node->num_keys; i++) {
         cmp = IndexKeyEntry_PM::compareEntries(entry, node->keys[i], _ordering);
@@ -467,12 +468,30 @@ persistent_ptr<PmseTreeNode> PmseTree::makeTreeRoot(IndexKeyEntry& entry) {
     n->parent = nullptr;
     return n;
 }
+void PmseTree::unlockParents(persistent_ptr<PmseTreeNode> node, std::list<LocksPtr>& locks) {
+    std::list<LocksPtr>::const_iterator iterator;
+    for (iterator = locks.begin(); iterator != locks.end(); ++iterator) {
+            iterator->ptr->unlock();
+    }
+    locks.erase(locks.begin(),locks.end());
+}
+
+bool PmseTree::nodeIsSafeForInsert(persistent_ptr<PmseTreeNode> node) {
+    if (node->num_keys < (TREE_ORDER)) {
+        return true;
+    }
+    else
+        return false;
+}
 
 persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
                 persistent_ptr<PmseTreeNode> node, IndexKeyEntry& entry,
-                const BSONObj& ordering) {
+                const BSONObj& ordering, std::list<LocksPtr>& locks) {
     uint64_t i = 0;
     int64_t cmp;
+    (node->_pmutex).lock();
+    locks.push_back(LocksPtr(&(node->_pmutex)));
+    std::list<LocksPtr>::const_iterator iterator;
     persistent_ptr<PmseTreeNode> current = node;
 
     if (current == nullptr)
@@ -489,8 +508,23 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
                 break;
             }
         }
+        (current->children_array[i]->_pmutex).lock();
         current = current->children_array[i];
+        if (nodeIsSafeForInsert(current)) {
+            unlockParents(current, locks);
+        }
+        locks.push_back(LocksPtr(&(current->_pmutex)));
+
     }
+    if(current->previous) {
+        current->previous->_pmutex.lock();
+        locks.push_back(LocksPtr(&(current->previous->_pmutex)));
+    }
+    if(current->next) {
+        current->next->_pmutex.lock();
+        locks.push_back(LocksPtr(&(current->next->_pmutex)));
+    }
+
     return current;
 }
 
@@ -746,15 +780,28 @@ persistent_ptr<PmseTreeNode> PmseTree::allocateNewRoot(
     return new_root;
 }
 
+void PmseTree::unlockTree(std::list<LocksPtr>& locks) {
+    std::list<LocksPtr>::const_iterator iterator;
+    try {
+        for (iterator = locks.begin(); iterator != locks.end(); ++iterator) {
+            iterator->ptr->unlock();
+        }
+        locks.erase(locks.begin(),locks.end());
+    }catch(std::exception &e){}
+
+}
+
 Status PmseTree::insert(pool_base pop, IndexKeyEntry& entry,
                         const BSONObj& ordering, bool dupsAllowed) {
     persistent_ptr<PmseTreeNode> node;
     Status status = Status::OK();
     uint64_t i;
     int64_t cmp;
-    stdx::unique_lock<nvml::obj::shared_mutex> lock(_pmutex);
+    std::list<LocksPtr> locks;
 
     if (!_root) {
+//        stdx::unique_lock<nvml::obj::shared_mutex> lock(_pmutex);
+
         // root not allocated yet
         try {
             transaction::exec_tx(pop, [this, &entry] {
@@ -768,7 +815,7 @@ Status PmseTree::insert(pool_base pop, IndexKeyEntry& entry,
         }
         return status;
     }
-    node = locateLeafWithKeyPM(_root, entry, ordering);
+    node = locateLeafWithKeyPM(_root, entry, ordering, locks);
 
     /*
      * Duplicate key check
@@ -782,6 +829,7 @@ Status PmseTree::insert(pool_base pop, IndexKeyEntry& entry,
                     StringBuilder sb;
                     sb << "Duplicate key error ";
                     sb << "dup key: " << entry.key.toString();
+                    unlockTree(locks);
                     return Status(ErrorCodes::DuplicateKey, sb.str());
                 } else {
                     break;
@@ -801,6 +849,7 @@ Status PmseTree::insert(pool_base pop, IndexKeyEntry& entry,
         } catch (std::exception &e) {
             std::cout << e.what() << std::endl;
         }
+        unlockTree(locks);
         return status;
     }
 
@@ -814,6 +863,7 @@ Status PmseTree::insert(pool_base pop, IndexKeyEntry& entry,
     } catch (std::exception &e) {
         log() << e.what();
     }
+    unlockTree(locks);
     return Status::OK();
 }
 

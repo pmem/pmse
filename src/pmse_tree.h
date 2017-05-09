@@ -89,11 +89,18 @@ struct PmseTreeNode {
     persistent_ptr<PmseTreeNode> previous = nullptr;
     persistent_ptr<PmseTreeNode> parent = nullptr;
     p<bool> is_leaf = false;
+    nvml::obj::shared_mutex _pmutex;
 };
 
 struct CursorObject {
     persistent_ptr<PmseTreeNode> node;
     uint64_t index;
+};
+
+class LocksPtr {
+ public:
+    LocksPtr(nvml::obj::shared_mutex *_ptr) : ptr(_ptr){}
+    nvml::obj::shared_mutex *ptr;
 };
 
 class PmseTree {
@@ -107,6 +114,12 @@ class PmseTree {
     p<int64_t> _records = 0;
 
  private:
+//    typedef std::shared_ptr<nvml::obj::shared_mutex> LocksPtr;
+//    typedef std::list<LocksPtr> Locks;
+//    typedef std::shared_ptr<nvml::obj::shared_mutex> SharedMutexPtr;
+    void unlockTree(std::list<LocksPtr>& locks);
+    void unlockParents(persistent_ptr<PmseTreeNode> node, std::list<LocksPtr>& locks);
+    bool nodeIsSafeForInsert(persistent_ptr<PmseTreeNode> node);
     uint64_t cut(uint64_t length);
     int64_t getNeighborIndex(persistent_ptr<PmseTreeNode> node);
     persistent_ptr<PmseTreeNode> coalesceNodes(
@@ -125,7 +138,7 @@ class PmseTree {
     Status insertKeyIntoLeaf(persistent_ptr<PmseTreeNode> node, IndexKeyEntry& entry, const BSONObj& _ordering);
     persistent_ptr<PmseTreeNode> locateLeafWithKeyPM(
                     persistent_ptr<PmseTreeNode> node, IndexKeyEntry& entry,
-                    const BSONObj& _ordering);
+                    const BSONObj& _ordering, std::list<LocksPtr>& locks);
     persistent_ptr<PmseTreeNode> splitFullNodeAndInsert(
                     pool_base pop, persistent_ptr<PmseTreeNode> node,
                     IndexKeyEntry& entry, const BSONObj& _ordering);
