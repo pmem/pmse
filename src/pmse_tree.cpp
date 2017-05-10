@@ -516,15 +516,6 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
         locks.push_back(LocksPtr(&(current->_pmutex)));
 
     }
-    if(current->previous) {
-        current->previous->_pmutex.lock();
-        locks.push_back(LocksPtr(&(current->previous->_pmutex)));
-    }
-    if(current->next) {
-        current->next->_pmutex.lock();
-        locks.push_back(LocksPtr(&(current->next->_pmutex)));
-    }
-
     return current;
 }
 
