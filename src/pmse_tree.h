@@ -50,7 +50,7 @@ using namespace nvml::obj;
 
 namespace mongo {
 
-const uint64_t TREE_ORDER = 3;  // number of elements in internal node
+const uint64_t TREE_ORDER = 7;  // number of elements in internal node
 const int64_t BSON_MIN_SIZE = 5;
 
 const uint64_t MIN_END = 1;
@@ -99,7 +99,7 @@ struct CursorObject {
 
 class LocksPtr {
  public:
-    LocksPtr(nvml::obj::shared_mutex *_ptr) : ptr(_ptr){}
+    LocksPtr(nvml::obj::shared_mutex *_ptr) : ptr(_ptr) {}
     nvml::obj::shared_mutex *ptr;
 };
 
@@ -114,12 +114,8 @@ class PmseTree {
     p<int64_t> _records = 0;
 
  private:
-//    typedef std::shared_ptr<nvml::obj::shared_mutex> LocksPtr;
-//    typedef std::list<LocksPtr> Locks;
-//    typedef std::shared_ptr<nvml::obj::shared_mutex> SharedMutexPtr;
     void unlockTree(std::list<LocksPtr>& locks);
-    void unlockParents(persistent_ptr<PmseTreeNode> node, std::list<LocksPtr>& locks);
-    bool nodeIsSafeForInsert(persistent_ptr<PmseTreeNode> node);
+    bool nodeIsSafeForOperation(persistent_ptr<PmseTreeNode> node, bool insert);
     uint64_t cut(uint64_t length);
     int64_t getNeighborIndex(persistent_ptr<PmseTreeNode> node);
     persistent_ptr<PmseTreeNode> coalesceNodes(
@@ -133,12 +129,13 @@ class PmseTree {
                     persistent_ptr<PmseTreeNode> neighbor,
                     int64_t neighbor_index, int64_t k_prime_index,
                     IndexKeyEntry_PM k_prime);
-
     persistent_ptr<PmseTreeNode> makeTreeRoot(IndexKeyEntry& key);
-    Status insertKeyIntoLeaf(persistent_ptr<PmseTreeNode> node, IndexKeyEntry& entry, const BSONObj& _ordering);
+    Status insertKeyIntoLeaf(persistent_ptr<PmseTreeNode> node, IndexKeyEntry& entry,
+                             const BSONObj& _ordering);
     persistent_ptr<PmseTreeNode> locateLeafWithKeyPM(
                     persistent_ptr<PmseTreeNode> node, IndexKeyEntry& entry,
-                    const BSONObj& _ordering, std::list<LocksPtr>& locks);
+                    const BSONObj& _ordering, std::list<LocksPtr>& locks,
+                    persistent_ptr<PmseTreeNode>& lockNode, bool insert);
     persistent_ptr<PmseTreeNode> splitFullNodeAndInsert(
                     pool_base pop, persistent_ptr<PmseTreeNode> node,
                     IndexKeyEntry& entry, const BSONObj& _ordering);
@@ -163,7 +160,6 @@ class PmseTree {
     persistent_ptr<PmseTreeNode> deleteEntry(pool_base pop, IndexKeyEntry& key,
                                              persistent_ptr<PmseTreeNode> node,
                                              uint64_t index);
-
     persistent_ptr<PmseTreeNode> removeEntryFromNode(
                     IndexKeyEntry& key, persistent_ptr<PmseTreeNode> node,
                     uint64_t index);
@@ -173,7 +169,6 @@ class PmseTree {
     persistent_ptr<PmseTreeNode> _first;
     persistent_ptr<PmseTreeNode> _last;
     BSONObj _ordering;
-    nvml::obj::shared_mutex _pmutex;
 };
 
 }  // namespace mongo

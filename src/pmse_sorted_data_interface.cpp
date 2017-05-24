@@ -63,7 +63,7 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
             std::string filepath = _dbpath.toString() + ident.toString();
             if (!boost::filesystem::exists(filepath)) {
                 _pm_pool = pool<PmseTree>::create(filepath.c_str(), "pmse_index",
-                                                  10 * PMEMOBJ_MIN_POOL, 0666);
+                                                  30 * PMEMOBJ_MIN_POOL, 0666);
             } else {
                 _pm_pool = pool<PmseTree>::open(filepath.c_str(), "pmse_index");
             }
@@ -94,7 +94,6 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
             << key.objsize() << ' ' << key;
         return Status(ErrorCodes::KeyTooLong, msg);
     }
-
     try {
         IndexKeyEntry entry(key.getOwned(), loc);
         status = _tree->insert(_pm_pool, entry, _desc->keyPattern(), dupsAllowed);

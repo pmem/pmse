@@ -95,9 +95,10 @@ class PmseCursor final : public SortedDataInterface::Cursor {
         }
         return bb.obj();
     }
-    void locate(const BSONObj& key, const RecordId& loc);
+    void locate(const BSONObj& key, const RecordId& loc, std::list<LocksPtr>& locks);
+    void unlockTree(std::list<LocksPtr>& locks);
     void seekEndCursor();
-    bool lower_bound(IndexKeyEntry entry, CursorObject& cursor);
+    bool lower_bound(IndexKeyEntry entry, CursorObject& cursor, std::list<LocksPtr>& locks);
     bool previous(CursorObject&);
     void moveToNext();
     bool atOrPastEndPointAfterSeeking();
@@ -114,7 +115,6 @@ class PmseCursor final : public SortedDataInterface::Cursor {
      */
     boost::optional<IndexKeyEntry> _endPosition;
     CursorObject _cursor;
-
     CursorObject _returnValue;
     static IndexKeyEntry_PM min;
     static IndexKeyEntry_PM max;

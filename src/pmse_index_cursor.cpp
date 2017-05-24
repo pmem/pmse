@@ -36,6 +36,7 @@
 
 #include <shared_mutex>
 #include <limits>
+#include <list>
 
 #include "mongo/util/log.h"
 
@@ -61,35 +62,38 @@ PmseCursor::PmseCursor(OperationContext* txn, bool isForward,
       _wasMoved(false),
       _eofRestore(false) {}
 
-//Find entry in tree which is equal or bigger to input entry
-//Locates input cursor on that entry
-//Sets _locateFoundDataEnd when result is after last entry in tree
-bool PmseCursor::lower_bound(IndexKeyEntry entry, CursorObject& cursor) {
+    // Find entry in tree which is equal or bigger to input entry
+    // Locates input cursor on that entry
+    // Sets _locateFoundDataEnd when result is after last entry in tree
+bool PmseCursor::lower_bound(IndexKeyEntry entry, CursorObject& cursor, std::list<LocksPtr>& locks) {
     uint64_t i = 0;
     int64_t cmp;
+    (_tree->_root->_pmutex).lock_shared();
     persistent_ptr<PmseTreeNode> current = _tree->_root;
-
     while (!current->is_leaf) {
         i = 0;
         while (i < current->num_keys) {
             IndexEntryComparison c(Ordering::make(_ordering));
-            cmp = c.compare(entry, IndexKeyEntry(current->keys[i].getBSON(),RecordId(current->keys[i].loc)));
+            cmp = c.compare(entry, IndexKeyEntry(current->keys[i].getBSON(), RecordId(current->keys[i].loc)));
             if (cmp >= 0) {
                 i++;
             } else {
                 break;
             }
         }
+        (current->children_array[i]->_pmutex).lock_shared();
         current = current->children_array[i];
+        current->parent->_pmutex.unlock_shared();
     }
-    i=0;
+    locks.push_back(LocksPtr(&(current->_pmutex)));
+    i = 0;
     while (i < current->num_keys && IndexKeyEntry_PM::compareEntries(entry, current->keys[i], _ordering) > 0) {
             i++;
     }
-    //Iterated to end of node without finding bigger value
-    //It means: return next
-    if(i==current->num_keys) {
-        if(current->next) {
+    // Iterated to end of node without finding bigger value
+    // It means: return next
+    if (i == current->num_keys) {
+        if (current->next) {
             cursor.node = current->next;
             cursor.index = 0;
             return true;
@@ -108,13 +112,15 @@ bool PmseCursor::atOrPastEndPointAfterSeeking() {
     if (!_endState)
         return false;
     int cmp;
-    cmp = (_cursor.node->keys[_cursor.index]).getBSON().woCompare(_endState->query.key,_ordering, false);
-    if(cmp==0){
-        if((_cursor.node->keys[_cursor.index]).loc<_endState->query.loc.repr())
+    cmp = (_cursor.node->keys[_cursor.index]).getBSON().woCompare(_endState->query.key, _ordering, false);
+    if (cmp == 0) {
+        if ((_cursor.node->keys[_cursor.index]).loc < _endState->query.loc.repr()) {
             cmp = -1;
-        else if((_cursor.node->keys[_cursor.index]).loc > _endState->query.loc.repr())
+        } else if ((_cursor.node->keys[_cursor.index]).loc > _endState->query.loc.repr()) {
             cmp = 1;
-        else cmp = 0;
+            } else {
+                cmp = 0;
+            }
     }
     if (_forward) {
         // We may have landed after the end point.
@@ -125,41 +131,41 @@ bool PmseCursor::atOrPastEndPointAfterSeeking() {
     }
 }
 
-void PmseCursor::locate(const BSONObj& key, const RecordId& loc) {
+void PmseCursor::locate(const BSONObj& key, const RecordId& loc, std::list<LocksPtr>& locks) {
     bool locateFound;
     CursorObject locateCursor;
     _isEOF = false;
     const auto query = IndexKeyEntry(key, loc);
-    locateFound = lower_bound(query, locateCursor);
+    locateFound = lower_bound(query, locateCursor, locks);
     if (_forward) {
-        if(_locateFoundDataEnd) {
+        if (_locateFoundDataEnd) {
             _locateFoundDataEnd = false;
             _isEOF = true;
         }
-        if(locateFound){
+        if (locateFound) {
             _cursor.node = locateCursor.node;
             _cursor.index = locateCursor.index;
         }
-    }
-    else {  //manage backward
-        if(_locateFoundDataEnd) {
+    } else {  // manage backward
+        if (_locateFoundDataEnd) {
             _locateFoundDataEnd = false;
             _cursor.node = _last;
             _cursor.index = _last->num_keys-1;
-        }
-        else {
+        } else {
             _cursor.node = locateCursor.node;
             _cursor.index = locateCursor.index;
             int cmp;
-                cmp = (_cursor.node->keys[_cursor.index]).getBSON().woCompare(query.key,_ordering, false);
-                if(cmp==0){
-                    if((_cursor.node->keys[_cursor.index]).loc<query.loc.repr())
+                cmp = (_cursor.node->keys[_cursor.index]).getBSON().woCompare(query.key, _ordering, false);
+                if (cmp == 0) {
+                    if ((_cursor.node->keys[_cursor.index]).loc < query.loc.repr()) {
                         cmp = -1;
-                    else if((_cursor.node->keys[_cursor.index]).loc > query.loc.repr())
+                    } else if ((_cursor.node->keys[_cursor.index]).loc > query.loc.repr()) {
                         cmp = 1;
-                    else cmp = 0;
+                    } else {
+                        cmp = 0;
+                    }
                 }
-            if(cmp) {
+            if (cmp) {
                 moveToNext();
             }
         }
@@ -174,28 +180,31 @@ void PmseCursor::seekEndCursor() {
 
     if (!_endState || !_tree->_root)
         return;
-
-    found = lower_bound(_endState->query, endCursor);
-    if(_locateFoundDataEnd) {
+    std::list<LocksPtr> locks;
+    found = lower_bound(_endState->query, endCursor, locks);
+    if (_locateFoundDataEnd) {
         _endPositionIsDataEnd = true;
         _locateFoundDataEnd = false;
     }
     if (!_forward) {
         // lower_bound lands us on or after query. Reverse cursors must be on or before.
-        if( (endCursor.node == _first) && (endCursor.index == 0) ) {
+        if ( (endCursor.node == _first) && (endCursor.index == 0) ) {
             _endPositionIsDataEnd = true;
+            unlockTree(locks);
             return;
         }
         int cmp;
-            cmp = (endCursor.node->keys[endCursor.index]).getBSON().woCompare(_endState->query.key,_ordering, false);
-            if(cmp==0){
-                if((endCursor.node->keys[endCursor.index]).loc<_endState->query.loc.repr())
+            cmp = (endCursor.node->keys[endCursor.index]).getBSON().woCompare(_endState->query.key, _ordering, false);
+            if (cmp == 0) {
+                if ((endCursor.node->keys[endCursor.index]).loc < _endState->query.loc.repr()) {
                     cmp = -1;
-                else if((endCursor.node->keys[endCursor.index]).loc > _endState->query.loc.repr())
+                } else if ((endCursor.node->keys[endCursor.index]).loc > _endState->query.loc.repr()) {
                     cmp = 1;
-                else cmp = 0;
+                } else {
+                    cmp = 0;
+                }
             }
-        if(cmp>0) {
+        if (cmp > 0) {
             if (endCursor.index > 0) {
                 endCursor.index--;
             } else {
@@ -211,15 +220,15 @@ void PmseCursor::seekEndCursor() {
             }
         }
     }
-    if(found)
-    {
-        _endPosition = IndexKeyEntry(endCursor.node->keys[endCursor.index].getBSON(),RecordId(endCursor.node->keys[endCursor.index].loc));
+    if ( found ) {
+        _endPosition = IndexKeyEntry(endCursor.node->keys[endCursor.index].getBSON(),
+                                    RecordId(endCursor.node->keys[endCursor.index].loc));
     }
+    unlockTree(locks);
 }
 
 
-void PmseCursor::setEndPosition(const BSONObj& key, bool inclusive){
-
+void PmseCursor::setEndPosition(const BSONObj& key, bool inclusive) {
     if (key.isEmpty()) {
         // This means scan to end of index.
         _endState = boost::none;
@@ -232,27 +241,32 @@ void PmseCursor::setEndPosition(const BSONObj& key, bool inclusive){
 }
 
 bool PmseCursor::atEndPoint() {
-    if(_endPosition && (IndexKeyEntry_PM::compareEntries(_endPosition.get(),_cursor.node->keys[_cursor.index], _ordering) ==0))
+    if (_endPosition &&
+        (IndexKeyEntry_PM::compareEntries(_endPosition.get(), _cursor.node->keys[_cursor.index], _ordering) == 0))
         return true;
     return false;
 }
 
 boost::optional<IndexKeyEntry> PmseCursor::next(
                 RequestedInfo parts = kKeyAndLoc) {
-    std::shared_lock<nvml::obj::shared_mutex> lock(_tree->_pmutex);
+    std::list<LocksPtr> locks;
     if (_wasRestore) {
-        locate(_cursorKey, RecordId(_cursorId));
+        locate(_cursorKey, RecordId(_cursorId), locks);
+        moveToNext();
         _wasRestore = false;
-    }
-    else{
+    } else {
         moveToNext();
     }
-    if(!_cursor.node)
+    if (!_cursor.node) {
+        unlockTree(locks);
         return boost::none;
+    }
     if (atEndPoint())
         _isEOF = true;
-    if (_isEOF)
+    if (_isEOF) {
+        unlockTree(locks);
         return {};
+    }
     if (_cursor.node.raw_ptr()->off != 0) {
             _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
             _cursorId = _cursor.node->keys[_cursor.index].loc;
@@ -260,7 +274,9 @@ boost::optional<IndexKeyEntry> PmseCursor::next(
         } else {
             _eofRestore = true;
         }
-    return IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),RecordId((_cursor.node->keys[_cursor.index]).loc));
+    unlockTree(locks);
+    return IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),
+                    RecordId((_cursor.node->keys[_cursor.index]).loc));
 }
 
 void PmseCursor::moveToNext() {
@@ -301,28 +317,39 @@ void PmseCursor::moveToNext() {
     }
 }
 
+void PmseCursor::unlockTree(std::list<LocksPtr>& locks) {
+    std::list<LocksPtr>::const_iterator iterator;
+    try {
+        for (iterator = locks.begin(); iterator != locks.end(); ++iterator) {
+            iterator->ptr->unlock_shared();
+        }
+        locks.erase(locks.begin(), locks.end());
+    }catch(std::exception &e) {}
+}
+
 boost::optional<IndexKeyEntry> PmseCursor::seek(const BSONObj& key,
                                                 bool inclusive,
                                                 RequestedInfo parts = kKeyAndLoc) {
-    std::shared_lock<nvml::obj::shared_mutex> lock(_tree->_pmutex);
     if (!_tree->_root)
         return {};
+    std::list<LocksPtr> locks;
+
     if (key.isEmpty()) {
-        if(inclusive){
+        if (inclusive) {
             _cursor.node = _first;
             _cursor.index = 0;
-        }
-        else{
+        } else {
             _cursor.node = _last;
             _cursor.index = (_cursor.node)->num_keys - 1;
             return {};
         }
-    }
-    else {
+    } else {
         const BSONObj query = stripFieldNames(key);
-        locate(query, _forward == inclusive ? RecordId::min() : RecordId::max());
-        if (_isEOF)
+        locate(query, _forward == inclusive ? RecordId::min() : RecordId::max(), locks);
+        if (_isEOF) {
+            unlockTree(locks);
             return {};
+        }
     }
     if (_cursor.node.raw_ptr()->off != 0) {
         _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
@@ -331,18 +358,19 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const BSONObj& key,
     } else {
         _eofRestore = true;
     }
-    return IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),RecordId((_cursor.node->keys[_cursor.index]).loc));
+    unlockTree(locks);
+    return IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),
+                    RecordId((_cursor.node->keys[_cursor.index]).loc));
 }
 
 boost::optional<IndexKeyEntry> PmseCursor::seek(const IndexSeekPoint& seekPoint,
                                                 RequestedInfo parts = kKeyAndLoc) {
     if (!_tree->_root)
         return {};
-    std::shared_lock<nvml::obj::shared_mutex> lock(_tree->_pmutex);
     const BSONObj query = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
     auto discriminator = RecordId::min();
     bool gt = false;
-
+    std::list<LocksPtr> locks;
     BSONObjIterator lhsIt(query);
     while (lhsIt.more()) {
         const BSONElement l = lhsIt.next();
@@ -353,11 +381,13 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const IndexSeekPoint& seekPoint,
             }
         }
     }
-    locate(query, _forward ? RecordId::min() : RecordId::max());
-    if (_isEOF)
+    locate(query, _forward ? RecordId::min() : RecordId::max(), locks);
+    if (_isEOF) {
+        unlockTree(locks);
         return {};
-    if(gt)
-        if(query.woCompare(_cursor.node->keys[_cursor.index].getBSON(), _ordering, false)==0)
+    }
+    if (gt)
+        if (query.woCompare(_cursor.node->keys[_cursor.index].getBSON(), _ordering, false) == 0)
             next(parts);
     if (_cursor.node.raw_ptr()->off != 0) {
         _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
@@ -366,7 +396,9 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const IndexSeekPoint& seekPoint,
     } else {
         _eofRestore = true;
     }
-    return IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),RecordId((_cursor.node->keys[_cursor.index]).loc));
+    unlockTree(locks);
+    return IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),
+                    RecordId((_cursor.node->keys[_cursor.index]).loc));
 }
 
 boost::optional<IndexKeyEntry> PmseCursor::seekExact(
