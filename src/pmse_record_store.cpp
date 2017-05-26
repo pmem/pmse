@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2016, Intel Corporation
+ * Copyright 2014-2017, Intel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -80,7 +80,7 @@ PmseRecordStore::PmseRecordStore(StringData ns,
             try {
                 _mapPool = pool<root>::create(mapper_filename, "pmse_mapper",
                                               (ns.toString() == "local.startup_log" ||
-                                               ns.toString() == "_mdb_catalog" ? 10 : 80)
+                                               ns.toString() == "_mdb_catalog" ? 40 : 80)
                                               * PMEMOBJ_MIN_POOL);
             } catch (std::exception &e) {
                 log() << "Error handled: " << e.what();
