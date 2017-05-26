@@ -74,45 +74,60 @@ class PmseCursor final : public SortedDataInterface::Cursor {
     void reattachToOperationContext(OperationContext* opCtx);
 
  private:
-    virtual boost::optional<IndexKeyEntry> iterateToNext(RequestedInfo parts);
-
-    boost::optional<IndexKeyEntry> seekInTree(const BSONObj& key,
+    boost::optional<IndexKeyEntry> seekInTree(IndexKeyEntry& key,
                                               KeyString::Discriminator discriminator,
                                               RequestedInfo parts);
+    bool hasFieldNames(const BSONObj& obj) {
+        BSONForEach(e, obj) {
+            if (e.fieldName()[0])
+                return true;
+        }
+        return false;
+    }
 
-    persistent_ptr<PmseTreeNode> find_leaf(persistent_ptr<PmseTreeNode> node,
-                                           const BSONObj& key,
-                                           const BSONObj& _ordering);
+    BSONObj stripFieldNames(const BSONObj& query) {
+        if (!hasFieldNames(query))
+            return query;
+
+        BSONObjBuilder bb;
+        BSONForEach(e, query) {
+            bb.appendAs(e, StringData());
+        }
+        return bb.obj();
+    }
+    void locate(const BSONObj& key, const RecordId& loc, std::list<LocksPtr>& locks);
+    void unlockTree(std::list<LocksPtr>& locks);
+    void seekEndCursor();
+    bool lower_bound(IndexKeyEntry entry, CursorObject& cursor, std::list<LocksPtr>& locks);
     bool previous(CursorObject&);
-    bool correctType(BSONObj record);
     void moveToNext();
-
+    bool atOrPastEndPointAfterSeeking();
+    bool atEndPoint();
     const bool _forward;
     const BSONObj& _ordering;
     persistent_ptr<PmseTreeNode> _first;
     persistent_ptr<PmseTreeNode> _last;
     const bool _unique;
     persistent_ptr<PmseTree> _tree;
-    BSONType cursorType;
-    /*
-     * Marks end position for seek and next. Set by setEndPosition().
-     * */
-    BSONObj_PM* _endPosition;
-    uint64_t _inf;
     bool _isEOF = true;
     /*
      * Cursor used for iterating with next until "_endPosition"
      */
+    boost::optional<IndexKeyEntry> _endPosition;
     CursorObject _cursor;
     CursorObject _returnValue;
-    static const BSONObj min;
-    static const BSONObj max;
-    BSONObj_PM end_min_pm;
-    BSONObj_PM end_max_pm;
+    static IndexKeyEntry_PM min;
+    static IndexKeyEntry_PM max;
 
+    struct EndState {
+        EndState(BSONObj key, RecordId loc) : query(std::move(key), loc) {}
+        IndexKeyEntry query;
+    };
+    boost::optional<EndState> _endState;
     BSONObj _cursorKey;
-    RecordId _cursorId;
-
+    int64_t _cursorId;
+    bool _endPositionIsDataEnd;
+    bool _locateFoundDataEnd;
     bool _wasMoved;
     bool _eofRestore;
     bool _wasRestore = false;

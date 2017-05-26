@@ -32,174 +32,89 @@
 
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
 
+#include "pmse_tree.h"
+#include "pmse_sorted_data_interface.h"
+#include "pmse_change.h"
+
+#include <list>
+
 #include "mongo/platform/basic.h"
 #include "mongo/db/storage/sorted_data_interface.h"
 #include "mongo/util/log.h"
 #include "mongo/stdx/memory.h"
-
-#include "pmse_tree.h"
-#include "pmse_sorted_data_interface.h"
-#include "pmse_change.h"
 
 #include "libpmemobj++/transaction.hpp"
 #include "libpmemobj++/make_persistent_array.hpp"
 
 namespace mongo {
 
-Status PmseTree::dupKeyCheck(pool_base pop, BSONObj& key, const RecordId& loc) {
-    persistent_ptr<PmseTreeNode> node;
-    uint64_t i;
-    int64_t cmp;
-    node = locateLeafWithKey(_root, key, _ordering);
 
-    for (i = 0; i < node->num_keys; i++) {
-        cmp = key.woCompare(node->keys[i].getBSON(), _ordering, false);
-        if (cmp == 0) {
-            // Found the same key
-            if (node->values_array[i] != loc) {
-                // Found the same key with different ID - Error
-                StringBuilder sb;
-                sb << "Duplicate key error ";
-                sb << "dup key: " << key.toString();
-                return Status(ErrorCodes::DuplicateKey, sb.str());
-            } else {
-                if (i != 0) {
-                    // We are not on a first key, so previous one was different - don't need to check it
-                    return Status::OK();
-                } else {
-                    // check one prev
-                    if (node->previous) {
-                        if (node->previous->values_array[node->previous->num_keys] != loc) {
-                            StringBuilder sb;
-                            sb << "Duplicate key error ";
-                            sb << "dup key: " << key.toString();
-                            return Status(ErrorCodes::DuplicateKey, sb.str());
-                        }
-                        return Status::OK();
-                    }
-                    return Status::OK();
-                }
-            }
-        }
-    }
-    return Status::OK();
+int64_t IndexKeyEntry_PM::compareEntries(IndexKeyEntry& leftEntry,
+                                         IndexKeyEntry_PM& rightEntry,
+                                         const BSONObj& ordering) {
+    int cmp;
+
+    cmp = leftEntry.key.woCompare(rightEntry.getBSON(), ordering, false);
+    if (cmp != 0)
+        return cmp;
+    // when entries keys are equal, compare RecordID
+    if (leftEntry.loc.repr() < rightEntry.loc)
+        return -1;
+    else if (leftEntry.loc.repr() > rightEntry.loc)
+        return 1;
+    else
+        return 0;
 }
 
-bool PmseTree::remove(pool_base pop, BSONObj& key, const RecordId& loc,
+BSONObj IndexKeyEntry_PM::getBSON() {
+    char* data_ptr = data.get();
+    return BSONObj(data_ptr);
+}
+
+bool PmseTree::remove(pool_base pop, IndexKeyEntry& entry,
                       bool dupsAllowed, const BSONObj& ordering,
                       OperationContext* txn = nullptr) {
     persistent_ptr<PmseTreeNode> node;
-    persistent_ptr<PmseTreeNode> tempNode;
-    RecordId key_record;
     uint64_t i;
     int64_t cmp;
-    stdx::unique_lock<nvml::obj::shared_mutex> lock(_pmutex);
+    std::list<LocksPtr> locks;
+    persistent_ptr<PmseTreeNode> lockNode;
     _ordering = ordering;
     // find node with key
-    node = locateLeafWithKey(_root, key, _ordering);
-    tempNode = node;
-    // find place in node
+    if (!_root)
+        return false;
+    node = locateLeafWithKeyPM(_root, entry, _ordering, locks, lockNode, false);
+
     for (i = 0; i < node->num_keys; i++) {
-        key_record = node->values_array[i];
-        cmp = key.woCompare(node->keys[i].getBSON(), _ordering, false);
+        cmp = IndexKeyEntry_PM::compareEntries(entry, node->keys[i], _ordering);
         if (cmp == 0) {
-            key_record = node->values_array[i];
-            if (dupsAllowed) {
-                if (key_record.repr() != loc.repr()) {
-                    while ((key.woCompare(node->keys[i].getBSON(), _ordering, false) == 0) &&
-                           (node->values_array[i]).repr() != loc.repr()) {
-                        if (i > 0) {
-                            i--;
-                        } else {
-                            if (node->previous) {
-                                node = node->previous;
-                                i = node->num_keys - 1;
-                            } else {
-                                return false;
-                            }
-                        }
-                    }
-                    key_record = node->values_array[i];
-                    if (key_record.repr() != loc.repr()) {
-                        /*
-                         * Start looking for in other direction, staring from node returned by find_node().
-                         */
-                        node = tempNode;
-                        i = 0;
-                        while ((key.woCompare(node->keys[i].getBSON(), _ordering, false) == 0) &&
-                               (node->values_array[i]).repr() != loc.repr()) {
-                            if (i < node->num_keys-1) {
-                                i++;
-                            } else {
-                                if (node->next) {
-                                    node = node->next;
-                                    i = 0;
-                                } else {
-                                    return false;
-                                }
-                            }
-                        }
-                        if (key.woCompare(node->keys[i].getBSON(), _ordering, false) != 0) {
-                            return false;
-                        }
-                    }
-                }
-            }
-            // TODO(jschmieg): This should be removed
-            key_record = node->values_array[i];
             break;
         }
     }
-
-    // We didn't find value in node - it must be in previous one - only for non-unique values
+    // not found
     if (i == node->num_keys) {
-        if (dupsAllowed) {
-            if (node->previous) {
-                node = node->previous;
-                i = node->num_keys-1;
-                if (key.woCompare(node->keys[i].getBSON(), _ordering, false) == 0) {
-                    while ((key.woCompare(node->keys[i].getBSON(), _ordering, false) == 0) &&
-                           (node->values_array[i]).repr() != loc.repr()) {
-                        if (i > 0) {
-                            i--;
-                        } else {
-                            if (node->previous) {
-                                node = node->previous;
-                                i = node->num_keys-1;
-                            } else {
-                                return false;
-                            }
-                        }
-                    }
-                } else {
-                    return false;
-                }
-            } else {
-                return false;
-            }
-        } else {
-            return false;
-        }
+        if (lockNode) {
+               lockNode->_pmutex.unlock();
+           }
+        unlockTree(locks);
+        return false;
     }
-
-    /*
-     * Remove value
-     */
-    if (txn)
-        txn->recoveryUnit()->registerChange(new RemoveIndexChange(pop, key, loc, dupsAllowed, ordering));
-
-    _root = deleteEntry(pop, key, node, i);
+    _root = deleteEntry(pop, entry, node, i);
+    if (lockNode) {
+       lockNode->_pmutex.unlock();
+    }
+    unlockTree(locks);
     return true;
 }
 
 persistent_ptr<PmseTreeNode> PmseTree::deleteEntry(pool_base pop,
-                                                   BSONObj& key,
+                                                   IndexKeyEntry& key,
                                                    persistent_ptr<PmseTreeNode> node,
                                                    uint64_t index) {
     uint64_t min_keys;
     int64_t neighbor_index;
     int64_t k_prime_index;
-    BSONObj_PM k_prime;
+    IndexKeyEntry_PM k_prime;
     uint64_t capacity;
     persistent_ptr<PmseTreeNode> neighbor;
 
@@ -262,10 +177,9 @@ persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
                 pool_base pop, persistent_ptr<PmseTreeNode> root,
                 persistent_ptr<PmseTreeNode> n,
                 persistent_ptr<PmseTreeNode> neighbor, int64_t neighbor_index,
-                int64_t k_prime_index, BSONObj_PM k_prime) {
+                int64_t k_prime_index, IndexKeyEntry_PM k_prime) {
     uint64_t i;
     persistent_ptr<PmseTreeNode> tmp;
-
     /* Case: n has a neighbor to the left.
      * Pull the neighbor's last key-pointer pair over
      * from the neighbor's right end to n's left end.
@@ -280,7 +194,6 @@ persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
         } else {
             for (i = n->num_keys; i > 0; i--) {
                 n->keys[i] = n->keys[i - 1];
-                n->values_array[i] = n->values_array[i - 1];
             }
         }
         if (!n->is_leaf) {
@@ -292,24 +205,22 @@ persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
             n->parent->keys[k_prime_index].data =
                             neighbor->keys[neighbor->num_keys - 1].data;
         } else {
-            n->values_array[0] = neighbor->values_array[neighbor->num_keys - 1];
             n->keys[0] = neighbor->keys[neighbor->num_keys - 1];
 
-            BSONObj_PM bsonPM;
+            IndexKeyEntry_PM entryPM;
             persistent_ptr<char> obj;
-            transaction::exec_tx(pop, [&obj, n] {
                 obj = pmemobj_tx_alloc(n->keys[0].getBSON().objsize(), 1);
                 memcpy(static_cast<void*>(obj.get()),
                        n->keys[0].getBSON().objdata(),
                        n->keys[0].getBSON().objsize());
-            });
 
-            bsonPM = (n->parent->keys[k_prime_index]);
-            if (bsonPM.data.raw().off != 0) {
-                pmemobj_tx_free(bsonPM.data.raw());
+            entryPM = (n->parent->keys[k_prime_index]);
+            if (entryPM.data.raw().off != 0) {
+                pmemobj_tx_free(entryPM.data.raw());
             }
-            bsonPM.data = obj;
-            n->parent->keys[k_prime_index].data = bsonPM.data;
+            entryPM.data = obj;
+            n->parent->keys[k_prime_index].data = entryPM.data;
+            n->parent->keys[k_prime_index].loc = entryPM.loc;
         }
     } else {
         /*
@@ -320,35 +231,33 @@ persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
          */
         if (n->is_leaf) {
             n->keys[n->num_keys] = neighbor->keys[0];
-            n->values_array[n->num_keys] = neighbor->values_array[0];
-
-            BSONObj_PM bsonPM;
+            IndexKeyEntry_PM entryPM;
             persistent_ptr<char> obj;
-            transaction::exec_tx(pop, [&obj, neighbor] {
-                obj = pmemobj_tx_alloc(neighbor->keys[1].getBSON().objsize(), 1);
-                memcpy(static_cast<void*>(obj.get()),
-                       neighbor->keys[1].getBSON().objdata(),
-                       neighbor->keys[1].getBSON().objsize());
-            });
+            obj = pmemobj_tx_alloc(neighbor->keys[1].getBSON().objsize(), 1);
+            memcpy(static_cast<void*>(obj.get()),
+                   neighbor->keys[1].getBSON().objdata(),
+                   neighbor->keys[1].getBSON().objsize());
 
-            bsonPM = (n->parent->keys[k_prime_index]);
-            if (bsonPM.data.raw().off != 0) {
-                pmemobj_tx_free(bsonPM.data.raw());
+            entryPM = (n->parent->keys[k_prime_index]);
+            if (entryPM.data.raw().off != 0) {
+                pmemobj_tx_free(entryPM.data.raw());
             }
 
-            bsonPM.data = obj;
+            entryPM.data = obj;
 
-            n->parent->keys[k_prime_index].data = bsonPM.data;
+            n->parent->keys[k_prime_index].data = entryPM.data;
+            n->parent->keys[k_prime_index].loc = entryPM.loc;
         } else {
             n->keys[n->num_keys] = k_prime;
             n->children_array[n->num_keys + 1] = neighbor->children_array[0];
             tmp = n->children_array[n->num_keys + 1];
             tmp->parent = n;
 
-            BSONObj_PM bsonPM;
-            bsonPM = (n->parent->keys[k_prime_index]);
+            IndexKeyEntry_PM entryPM;
+            entryPM = (n->parent->keys[k_prime_index]);
 
             n->parent->keys[k_prime_index].data = neighbor->keys[0].data;
+            n->parent->keys[k_prime_index].loc = neighbor->keys[0].loc;
         }
         if (!n->is_leaf) {
             for (i = 0; i < neighbor->num_keys - 1; i++) {
@@ -359,7 +268,6 @@ persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
         } else {
             for (i = 0; i < neighbor->num_keys - 1; i++) {
                 neighbor->keys[i] = neighbor->keys[i + 1];
-                neighbor->values_array[i] = neighbor->values_array[i + 1];
             }
         }
     }
@@ -384,11 +292,10 @@ persistent_ptr<PmseTreeNode> PmseTree::coalesceNodes(
                 pool_base pop, persistent_ptr<PmseTreeNode> root,
                 persistent_ptr<PmseTreeNode> n,
                 persistent_ptr<PmseTreeNode> neighbor, int64_t neighbor_index,
-                BSONObj_PM k_prime) {
+                IndexKeyEntry_PM k_prime) {
     uint64_t i, j, neighbor_insertion_index, n_end;
     persistent_ptr<PmseTreeNode> tmp;
-    BSONObj k_prime_temp;
-
+    IndexKeyEntry k_prime_temp(k_prime.getBSON(), RecordId((k_prime).loc));
     // Swap neighbor with node if node is on the extreme left and neighbor is to its right.
     if (neighbor_index == -1) {
         tmp = n;
@@ -413,14 +320,10 @@ persistent_ptr<PmseTreeNode> PmseTree::coalesceNodes(
         /*
          * Append k_prime.
          */
-        BSONObj_PM bsonPM;
-        persistent_ptr<char> obj;
-        obj = pmemobj_tx_alloc(k_prime.getBSON().objsize(), 1);
-        memcpy(static_cast<void*>(obj.get()), k_prime.getBSON().objdata(),
+        neighbor->keys[neighbor_insertion_index].data = pmemobj_tx_alloc(k_prime.getBSON().objsize(), 1);
+        memcpy(static_cast<void*>(neighbor->keys[neighbor_insertion_index].data.get()), k_prime.getBSON().objdata(),
                k_prime.getBSON().objsize());
-
-        bsonPM.data = obj;
-        neighbor->keys[neighbor_insertion_index].data = bsonPM.data;  // Why we assign to bsonPM and later to another?
+        (neighbor->keys[neighbor_insertion_index]).loc = k_prime.loc;
         neighbor->num_keys++;
         n_end = n->num_keys;
 
@@ -450,7 +353,6 @@ persistent_ptr<PmseTreeNode> PmseTree::coalesceNodes(
          */
         for (i = neighbor_insertion_index, j = 0; j < n->num_keys; i++, j++) {
             neighbor->keys[i] = n->keys[j];
-            neighbor->values_array[i] = n->values_array[j];
             neighbor->num_keys++;
         }
         if (n->next) {
@@ -459,11 +361,9 @@ persistent_ptr<PmseTreeNode> PmseTree::coalesceNodes(
         neighbor->next = n->next;
     }
 
-    k_prime_temp = k_prime.getBSON();
     if (neighbor_index == -1) {
         for (i = 0; i < n->parent->num_keys; i++) {
-            int cmp = k_prime_temp.woCompare(n->parent->keys[i].getBSON(),
-                            _ordering, false);
+            int cmp = IndexKeyEntry_PM::compareEntries(k_prime_temp, n->parent->keys[i], _ordering);
             if (cmp == 0) {
                 break;
             }
@@ -472,14 +372,8 @@ persistent_ptr<PmseTreeNode> PmseTree::coalesceNodes(
        i = neighbor_index;
     }
     root = deleteEntry(pop, k_prime_temp, n->parent, i);
-
-    delete_persistent<BSONObj_PM[TREE_ORDER]>(n->keys);
-    if (n->is_leaf) {
-        delete_persistent<RecordId[TREE_ORDER]>(n->values_array);
-    }
-
+    delete_persistent<IndexKeyEntry_PM[TREE_ORDER]>(n->keys);
     delete_persistent<PmseTreeNode>(n);
-
     return root;
 }
 
@@ -534,38 +428,30 @@ persistent_ptr<PmseTreeNode> PmseTree::adjustRoot(
         new_root = nullptr;
     }
 
-    delete_persistent<BSONObj_PM[TREE_ORDER]>(root->keys);
-    delete_persistent<RecordId[TREE_ORDER]>(root->values_array);
+    delete_persistent<IndexKeyEntry_PM[TREE_ORDER]>(root->keys);
     delete_persistent<PmseTreeNode>(root);
     return new_root;
 }
 
 persistent_ptr<PmseTreeNode> PmseTree::removeEntryFromNode(
-                BSONObj& key, persistent_ptr<PmseTreeNode> node,
+                IndexKeyEntry& key, persistent_ptr<PmseTreeNode> node,
                 uint64_t index) {
     uint64_t i = index, num_pointers;
 
     // Remove the key and shift other keys accordingly.
-    BSONObj_PM bsonPM;
-    bsonPM = (node->keys[i]);
-    pmemobj_tx_free(bsonPM.data.raw());
+    IndexKeyEntry_PM entryPM;
+    entryPM = (node->keys[i]);
+    pmemobj_tx_free(entryPM.data.raw());
 
     for (++i; i < node->num_keys; i++) {
         node->keys[i - 1] = node->keys[i];
     }
     // Remove the pointer and shift other pointers accordingly.
     i = index;
-    if (node->is_leaf) {
-        num_pointers = node->num_keys;
-        for (++i; i < num_pointers; i++) {
-            node->values_array[i - 1] = node->values_array[i];
-        }
-    } else {
-        num_pointers = node->num_keys + 1;
-        i++;  // kfilipek: I don't understand what here is done: i++, next ++i. Why not i+=2?
-        for (++i; i < num_pointers; i++) {
-            node->children_array[i - 1] = node->children_array[i];
-        }
+    num_pointers = node->num_keys + 1;
+    i++;
+    for (++i; i < num_pointers; i++) {
+        node->children_array[i - 1] = node->children_array[i];
     }
 
     // Set the other pointers to NULL for tidiness.
@@ -578,46 +464,13 @@ persistent_ptr<PmseTreeNode> PmseTree::removeEntryFromNode(
     return node;
 }
 
-persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKey(
-                persistent_ptr<PmseTreeNode> node, BSONObj& key,
-                const BSONObj& _ordering) {
-    uint64_t i = 0;;
-    int64_t cmp;
-    bool wasEqual = false;
-    persistent_ptr<PmseTreeNode> current = node;
-
-    if (current == nullptr)
-        return current;
-
-    while (!current->is_leaf) {
-        i = 0;
-        while (i < current->num_keys) {
-            cmp = key.woCompare(current->keys[i].getBSON(), _ordering, false);
-            if (cmp > 0) {
-                i++;
-            } else {
-                if (cmp == 0) {
-                    if (wasEqual) {
-                        break;
-                    } else {
-                        wasEqual = true;
-                        i++;
-                    }
-                } else {
-                    break;
-                }
-            }
-        }
-        current = current->children_array[i];
-    }
-    return current;
-}
-
-persistent_ptr<PmseTreeNode> PmseTree::makeTreeRoot(BSONObj_PM& key,
-                                                    const RecordId& loc) {
+persistent_ptr<PmseTreeNode> PmseTree::makeTreeRoot(IndexKeyEntry& entry) {
+    persistent_ptr<char> obj;
     auto n = make_persistent<PmseTreeNode>(true);
-    (n->keys[0]).data = key.data;
-    n->values_array[0] = loc;
+
+    (n->keys[0]).data = pmemobj_tx_alloc(entry.key.objsize(), 1);
+    memcpy(static_cast<void*>((n->keys[0]).data.get()), entry.key.objdata(), entry.key.objsize());
+    (n->keys[0]).loc = entry.loc.repr();
     n->num_keys = n->num_keys + 1;
     n->next = nullptr;
     n->previous = nullptr;
@@ -625,12 +478,33 @@ persistent_ptr<PmseTreeNode> PmseTree::makeTreeRoot(BSONObj_PM& key,
     return n;
 }
 
+bool PmseTree::nodeIsSafeForOperation(persistent_ptr<PmseTreeNode> node, bool insert) {
+    if (insert) {
+        if (node->num_keys < (TREE_ORDER)) {
+            return true;
+        }
+        else
+            return false;
+    } else {
+        uint64_t min_keys;
+        min_keys = node->is_leaf ? cut(TREE_ORDER - 1) : cut(TREE_ORDER) - 1;
+
+        if (node->num_keys > min_keys) {
+            return true;
+        }
+        else
+            return false;
+    }
+}
+
 persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
-                persistent_ptr<PmseTreeNode> node, BSONObj_PM& key,
-                const BSONObj& ordering) {
+                persistent_ptr<PmseTreeNode> node, IndexKeyEntry& entry,
+                const BSONObj& ordering, std::list<LocksPtr>& locks,
+                persistent_ptr<PmseTreeNode>& lockNode, bool insert) {
     uint64_t i = 0;
     int64_t cmp;
-    bool wasEqual = false;
+    (node->_pmutex).lock();
+    locks.push_back(LocksPtr(&(node->_pmutex)));
     persistent_ptr<PmseTreeNode> current = node;
 
     if (current == nullptr)
@@ -639,24 +513,23 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
     while (!current->is_leaf) {
         i = 0;
         while (i < current->num_keys) {
-            cmp = key.getBSON().woCompare(current->keys[i].getBSON(), ordering,
-                            false);
-            if (cmp > 0) {
+            cmp = IndexKeyEntry_PM::compareEntries(entry, current->keys[i], ordering);
+            if (cmp >= 0) {
                 i++;
             } else {
-                if (cmp == 0) {
-                    if (wasEqual) {
-                        break;
-                    } else {
-                        wasEqual = true;
-                        i++;
-                    }
-                } else {
-                    break;
-                }
+                break;
             }
         }
+        (current->children_array[i]->_pmutex).lock();
         current = current->children_array[i];
+        if (nodeIsSafeForOperation(current, insert)) {
+            unlockTree(locks);
+        }
+        locks.push_back(LocksPtr(&(current->_pmutex)));
+    }
+    if (current->next) {
+        current->next->_pmutex.lock();
+        lockNode = current->next;
     }
     return current;
 }
@@ -665,25 +538,23 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
  * Insert leaf into correct place.
  */
 Status PmseTree::insertKeyIntoLeaf(persistent_ptr<PmseTreeNode> node,
-                                   BSONObj_PM& key, const RecordId& loc,
+                                   IndexKeyEntry& entry,
                                    const BSONObj& _ordering) {
     uint64_t i, insertion_point = 0;
 
-    while (insertion_point < node->num_keys && key.getBSON().woCompare(
-                                    node->keys[insertion_point].getBSON(),
-                                    _ordering, false) > 0) {
-        insertion_point++;
+    while (insertion_point < node->num_keys &&
+                    IndexKeyEntry_PM::compareEntries(entry, node->keys[insertion_point], _ordering) > 0) {
+            insertion_point++;
     }
 
     for (i = node->num_keys; i > insertion_point; i--) {
         node->keys[i] = node->keys[i - 1];
-        node->values_array[i] = node->values_array[i - 1];
     }
 
-    node->keys[insertion_point].data = key.data;
-    node->values_array[insertion_point] = loc;
+    node->keys[insertion_point].data = pmemobj_tx_alloc(entry.key.objsize(), 1);
+    memcpy(static_cast<void*>((node->keys[insertion_point]).data.get()), entry.key.objdata(), entry.key.objsize());
+    node->keys[insertion_point].loc = entry.loc.repr();
     node->num_keys = node->num_keys + 1;
-
     return Status::OK();
 }
 
@@ -702,21 +573,18 @@ uint64_t PmseTree::cut(uint64_t length) {
  */
 persistent_ptr<PmseTreeNode> PmseTree::splitFullNodeAndInsert(
                 pool_base pop, persistent_ptr<PmseTreeNode> node,
-                BSONObj_PM& key, const RecordId& loc,
-                const BSONObj& _ordering) {
+                IndexKeyEntry& entry, const BSONObj& _ordering) {
     persistent_ptr<PmseTreeNode> new_leaf;
-    BSONObj_PM new_key;
+    IndexKeyEntry_PM new_entry;
     uint64_t insertion_index = 0;
     uint64_t i, j, split;
     persistent_ptr<PmseTreeNode> new_root;
     new_leaf = make_persistent<PmseTreeNode>(true);
-    BSONObj_PM temp_keys_array[TREE_ORDER + 1];
-    RecordId temp_values_array[TREE_ORDER + 1];
-
-    while (insertion_index < (node->num_keys) && key.getBSON().woCompare(
-                                    node->keys[insertion_index].getBSON(),
-                                    _ordering, false) > 0) {
-        insertion_index++;
+    new_leaf->_pmutex.lock();
+    IndexKeyEntry_PM temp_keys_array[TREE_ORDER + 1];
+    while (insertion_index < node->num_keys &&
+                    IndexKeyEntry_PM::compareEntries(entry, node->keys[insertion_index], _ordering) > 0) {
+       insertion_index++;
     }
     split = cut(TREE_ORDER);
 
@@ -727,22 +595,20 @@ persistent_ptr<PmseTreeNode> PmseTree::splitFullNodeAndInsert(
         if (j == insertion_index)
             j++;
         temp_keys_array[j] = node->keys[i];
-        temp_values_array[j] = node->values_array[i];
     }
 
     /*
      * Fill free slot with inserted key
      */
-    temp_keys_array[insertion_index].data = key.data;
-    temp_values_array[insertion_index] = loc;
-
+    temp_keys_array[insertion_index].data = pmemobj_tx_alloc(entry.key.objsize(), 1);
+    memcpy(static_cast<void*>((temp_keys_array[insertion_index]).data.get()), entry.key.objdata(), entry.key.objsize());
+    temp_keys_array[insertion_index].loc = entry.loc.repr();
     /*
      * Now copy from temp array to new and to old
      */
     node->num_keys = 0;
     for (i = 0; i < split; i++) {
         node->keys[i] = temp_keys_array[i];
-        node->values_array[i] = temp_values_array[i];
         node->num_keys = node->num_keys + 1;
     }
     /*
@@ -750,15 +616,15 @@ persistent_ptr<PmseTreeNode> PmseTree::splitFullNodeAndInsert(
      */
     for (i = split, j = 0; i < (TREE_ORDER + 1); i++, j++) {
         new_leaf->keys[j] = temp_keys_array[i];
-        new_leaf->values_array[j] = temp_values_array[i];
         new_leaf->num_keys = new_leaf->num_keys + 1;
     }
     /*
      * Update pointers next, previous
      */
     new_leaf->next = node->next;
-    if (node->next)
+    if (node->next) {
         node->next->previous = new_leaf;
+    }
     node->next = new_leaf;
     new_leaf->previous = node;
 
@@ -766,8 +632,9 @@ persistent_ptr<PmseTreeNode> PmseTree::splitFullNodeAndInsert(
      * Update parents
      */
     new_leaf->parent = node->parent;
-    new_key = new_leaf->keys[0];
-    new_root = insertIntoNodeParent(pop, _root, node, new_key, new_leaf);
+    new_entry = new_leaf->keys[0];
+    new_root = insertIntoNodeParent(pop, _root, node, new_entry, new_leaf);
+    new_leaf->_pmutex.unlock();
     _last = new_leaf;
     return new_root;
 }
@@ -789,14 +656,17 @@ uint64_t PmseTree::getLeftIndex(persistent_ptr<PmseTreeNode> parent,
 persistent_ptr<PmseTreeNode> PmseTree::insertKeyIntoNode(
                 pool_base pop, persistent_ptr<PmseTreeNode> root,
                 persistent_ptr<PmseTreeNode> n, uint64_t left_index,
-                BSONObj_PM& new_key, persistent_ptr<PmseTreeNode> right) {
+                IndexKeyEntry_PM& new_key, persistent_ptr<PmseTreeNode> right) {
     uint64_t i;
     for (i = n->num_keys; i > left_index; i--) {
         n->children_array[i + 1] = n->children_array[i];
         n->keys[i] = n->keys[i - 1];
     }
     n->children_array[left_index + 1] = right;
-    n->keys[left_index] = new_key;
+    (n->keys[left_index]).data = pmemobj_tx_alloc(new_key.getBSON().objsize(), 1);
+    memcpy(static_cast<void*>((n->keys[left_index]).data.get()), new_key.data.get(), new_key.getBSON().objsize());
+    (n->keys[left_index]).loc = new_key.loc;
+
     n->num_keys = n->num_keys + 1;
     return root;
 }
@@ -804,15 +674,15 @@ persistent_ptr<PmseTreeNode> PmseTree::insertKeyIntoNode(
 persistent_ptr<PmseTreeNode> PmseTree::insertToNodeAfterSplit(
                 pool_base pop, persistent_ptr<PmseTreeNode> root,
                 persistent_ptr<PmseTreeNode> old_node, uint64_t left_index,
-                BSONObj_PM& new_key, persistent_ptr<PmseTreeNode> right) {
+                IndexKeyEntry_PM& new_key, persistent_ptr<PmseTreeNode> right) {
     uint64_t i = 0, j, split;
-    BSONObj_PM k_prime;
+    IndexKeyEntry_PM k_prime;
     persistent_ptr<PmseTreeNode> new_node;
     persistent_ptr<PmseTreeNode> child;
     persistent_ptr<PmseTreeNode> new_root;
     new_node = make_persistent<PmseTreeNode>(false);
     persistent_ptr<PmseTreeNode> temp_children_array[TREE_ORDER + 2];
-    BSONObj_PM temp_keys_array[TREE_ORDER + 1];
+    IndexKeyEntry_PM temp_keys_array[TREE_ORDER + 1];
 
     for (i = 0, j = 0; i < old_node->num_keys + 1; i++, j++) {
         if (j == left_index + 1)
@@ -827,7 +697,10 @@ persistent_ptr<PmseTreeNode> PmseTree::insertToNodeAfterSplit(
     }
 
     temp_children_array[left_index + 1] = right;
-    temp_keys_array[left_index] = new_key;
+    (temp_keys_array[left_index]).data = pmemobj_tx_alloc(new_key.getBSON().objsize(), 1);
+    memcpy(static_cast<void*>((temp_keys_array[left_index]).data.get()),
+                               new_key.data.get(), new_key.getBSON().objsize());
+    (temp_keys_array[left_index]).loc = new_key.loc;
 
     split = cut(TREE_ORDER + 1);
     old_node->num_keys = 0;
@@ -853,9 +726,9 @@ persistent_ptr<PmseTreeNode> PmseTree::insertToNodeAfterSplit(
     }
     new_root = insertIntoNodeParent(pop, root, old_node, k_prime, new_node);
 
-    BSONObj_PM bsonPM = temp_keys_array[split-1];;
-    if (bsonPM.data.raw().off != 0)
-       pmemobj_tx_free(bsonPM.data.raw());
+    IndexKeyEntry_PM entryPM = temp_keys_array[split-1];;
+    if (entryPM.data.raw().off != 0)
+       pmemobj_tx_free(entryPM.data.raw());
 
     return new_root;
 }
@@ -866,24 +739,15 @@ persistent_ptr<PmseTreeNode> PmseTree::insertToNodeAfterSplit(
  */
 persistent_ptr<PmseTreeNode> PmseTree::insertIntoNodeParent(
                 pool_base pop, persistent_ptr<PmseTreeNode> root,
-                persistent_ptr<PmseTreeNode> left, BSONObj_PM& key,
+                persistent_ptr<PmseTreeNode> left, IndexKeyEntry_PM& key,
                 persistent_ptr<PmseTreeNode> right) {
     persistent_ptr<PmseTreeNode> parent = left->parent;
-    BSONObj_PM newKey;
     uint64_t left_index;
-    persistent_ptr<char> obj;
-
-    transaction::exec_tx(pop, [&obj, &key] {
-        obj = pmemobj_tx_alloc(key.getBSON().objsize(), 1);
-        memcpy(static_cast<void*>(obj.get()), key.getBSON().objdata(), key.getBSON().objsize());
-    });
-    newKey.data = obj;
-
     /*
      * Check if parent exist. If not, create new one.
      */
     if (parent == nullptr) {
-        return allocateNewRoot(pop, left, newKey, right);
+        return allocateNewRoot(pop, left, key, right);
     }
     /*
      * There is parent, insert key into it.
@@ -896,12 +760,12 @@ persistent_ptr<PmseTreeNode> PmseTree::insertIntoNodeParent(
      * If there is slot for new key - just insert
      */
     if (parent->num_keys < TREE_ORDER) {
-        return insertKeyIntoNode(pop, root, parent, left_index, newKey, right);
+        return insertKeyIntoNode(pop, root, parent, left_index, key, right);
     }
     /*
      * There is no slot for new key - we need to split
      */
-    return insertToNodeAfterSplit(pop, root, parent, left_index, newKey, right);
+    return insertToNodeAfterSplit(pop, root, parent, left_index, key, right);
 }
 
 /*
@@ -909,10 +773,13 @@ persistent_ptr<PmseTreeNode> PmseTree::insertIntoNodeParent(
  */
 persistent_ptr<PmseTreeNode> PmseTree::allocateNewRoot(
                 pool_base pop, persistent_ptr<PmseTreeNode> left,
-                BSONObj_PM& new_key, persistent_ptr<PmseTreeNode> right) {
+                IndexKeyEntry_PM& new_key, persistent_ptr<PmseTreeNode> right) {
     persistent_ptr<PmseTreeNode> new_root;
     new_root = make_persistent<PmseTreeNode>(false);
-    new_root->keys[0].data = new_key.data;
+    (new_root->keys[0]).data = pmemobj_tx_alloc(new_key.getBSON().objsize(), 1);
+    memcpy(static_cast<void*>((new_root->keys[0]).data.get()), new_key.data.get(), new_key.getBSON().objsize());
+    (new_root->keys[0]).loc = new_key.loc;
+
     new_root->children_array[0] = left;
     new_root->children_array[1] = right;
     new_root->num_keys = new_root->num_keys + 1;
@@ -922,19 +789,30 @@ persistent_ptr<PmseTreeNode> PmseTree::allocateNewRoot(
     return new_root;
 }
 
-Status PmseTree::insert(pool_base pop, BSONObj_PM& key, const RecordId& loc,
+void PmseTree::unlockTree(std::list<LocksPtr>& locks) {
+    std::list<LocksPtr>::const_iterator iterator;
+    try {
+        for (iterator = locks.begin(); iterator != locks.end(); ++iterator) {
+            iterator->ptr->unlock();
+        }
+        locks.erase(locks.begin(), locks.end());
+    }catch(std::exception &e) {}
+}
+
+Status PmseTree::insert(pool_base pop, IndexKeyEntry& entry,
                         const BSONObj& ordering, bool dupsAllowed) {
     persistent_ptr<PmseTreeNode> node;
     Status status = Status::OK();
     uint64_t i;
     int64_t cmp;
-    stdx::unique_lock<nvml::obj::shared_mutex> lock(_pmutex);
+    std::list<LocksPtr> locks;
+    persistent_ptr<PmseTreeNode> lockNode;
 
     if (!_root) {
         // root not allocated yet
         try {
-            transaction::exec_tx(pop, [this, &key, loc] {
-                _root = makeTreeRoot(key, loc);
+            transaction::exec_tx(pop, [this, &entry] {
+                _root = makeTreeRoot(entry);
                 _first = _root;
                 _last = _root;
             });
@@ -944,20 +822,21 @@ Status PmseTree::insert(pool_base pop, BSONObj_PM& key, const RecordId& loc,
         }
         return status;
     }
-    node = locateLeafWithKeyPM(_root, key, ordering);
+    node = locateLeafWithKeyPM(_root, entry, ordering, locks, lockNode, true);
 
     /*
      * Duplicate key check
      */
     if (!dupsAllowed) {
         for (i = 0; i < node->num_keys; i++) {
-            cmp = key.getBSON().woCompare(node->keys[i].getBSON(),
+            cmp = entry.key.woCompare(node->keys[i].getBSON(),
                                           ordering, false);
             if (cmp == 0) {
-                if (node->values_array[i] != loc) {
+                if (node->keys[i].loc != entry.loc.repr()) {
                     StringBuilder sb;
                     sb << "Duplicate key error ";
-                    sb << "dup key: " << key.getBSON().toString();
+                    sb << "dup key: " << entry.key.toString();
+                    unlockTree(locks);
                     return Status(ErrorCodes::DuplicateKey, sb.str());
                 } else {
                     break;
@@ -971,12 +850,16 @@ Status PmseTree::insert(pool_base pop, BSONObj_PM& key, const RecordId& loc,
      */
     if (node->num_keys < (TREE_ORDER)) {
         try {
-            transaction::exec_tx(pop, [this, &status, &node, &key, loc, ordering] {
-                status = insertKeyIntoLeaf(node, key, loc, ordering);
+            transaction::exec_tx(pop, [this, &status, &node, &entry, ordering] {
+                status = insertKeyIntoLeaf(node, entry, ordering);
             });
         } catch (std::exception &e) {
             std::cout << e.what() << std::endl;
         }
+        unlockTree(locks);
+        if (lockNode) {
+           lockNode->_pmutex.unlock();
+       }
         return status;
     }
 
@@ -984,12 +867,16 @@ Status PmseTree::insert(pool_base pop, BSONObj_PM& key, const RecordId& loc,
      * splitting
      */
     try {
-        transaction::exec_tx(pop, [this, pop, &node, &key, loc, ordering] {
-            _root = splitFullNodeAndInsert(pop, node, key, loc, ordering);
+        transaction::exec_tx(pop, [this, pop, &node, &entry, ordering] {
+            _root = splitFullNodeAndInsert(pop, node, entry, ordering);
         });
     } catch (std::exception &e) {
         log() << e.what();
     }
+    if (lockNode) {
+       lockNode->_pmutex.unlock();
+    }
+    unlockTree(locks);
     return Status::OK();
 }
 
