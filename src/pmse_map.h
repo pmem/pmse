@@ -82,9 +82,12 @@ class PmseMap {
 
     uint64_t insert(persistent_ptr<T> value) {
         auto id = getNextId();
+        if (!id) {
+            return 0;
+        }
         stdx::lock_guard<nvml::obj::mutex> lock(_listMutex[id->idValue % _size]);
         if (!insertKV(id, value)) {
-            return -1;
+            return 0;
         }
         ++_hashmapSize;
         return id->idValue;
@@ -277,10 +280,11 @@ class PmseMap {
                     try {
                         transaction::exec_tx(pop, [this, &temp] {
                             temp = make_persistent<KVPair>();
-                            temp->idValue = _counter;
                         });
+                        temp->idValue = _counter;
                     } catch (std::exception &e) {
                         std::cout << "Next id generation: " << e.what() << std::endl;
+                        return nullptr;
                     }
                 } else {
                     return nullptr;
