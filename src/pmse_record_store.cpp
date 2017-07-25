@@ -130,15 +130,14 @@ StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
     try {
         transaction::exec_tx(_mapPool, [&obj, len, data] {
             obj = pmemobj_tx_alloc(sizeof(InitData::size) + len, 1);
-            obj->size = len;
-            memcpy(obj->data, data, len);
         });
+        obj->size = len;
+        memcpy(obj->data, data, len);
     } catch (std::exception &e) {
-        log() << e.what();
+        log() << "RecordStore: " << e.what();
+        return StatusWith<RecordId>(ErrorCodes::OperationFailed,
+                                    "Insert record error");
     }
-    if (obj == nullptr)
-        return StatusWith<RecordId>(ErrorCodes::InternalError,
-                                    "Not allocated memory!");
     id = _mapper->insert(obj);
     _mapper->changeSize(len);
     if (!id)
