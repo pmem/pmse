@@ -73,7 +73,7 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
         _tree = _pm_pool.get_root();
     } catch (std::exception &e) {
         log() << "Error handled: " << e.what();
-        throw;
+        throw Status(ErrorCodes::CannotCreateIndex, "Cannot create/open pool while creating index");
     }
 }
 
