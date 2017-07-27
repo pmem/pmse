@@ -817,7 +817,7 @@ Status PmseTree::insert(pool_base pop, IndexKeyEntry& entry,
                 _last = _root;
             });
         } catch (std::exception &e) {
-            std::cout << e.what() << std::endl;
+            log() << "Index: " << e.what();
             status = Status(ErrorCodes::CommandFailed, e.what());
         }
         return status;
@@ -854,7 +854,11 @@ Status PmseTree::insert(pool_base pop, IndexKeyEntry& entry,
                 status = insertKeyIntoLeaf(node, entry, ordering);
             });
         } catch (std::exception &e) {
-            std::cout << e.what() << std::endl;
+            log() << "Index: " << e.what();
+            if (lockNode) {
+               lockNode->_pmutex.unlock();
+            }
+            return Status(ErrorCodes::CommandFailed, e.what());
         }
         unlockTree(locks);
         if (lockNode) {
@@ -871,7 +875,11 @@ Status PmseTree::insert(pool_base pop, IndexKeyEntry& entry,
             _root = splitFullNodeAndInsert(pop, node, entry, ordering);
         });
     } catch (std::exception &e) {
-        log() << e.what();
+        log() << "Index: " << e.what();
+        if (lockNode) {
+           lockNode->_pmutex.unlock();
+        }
+        return Status(ErrorCodes::CommandFailed, e.what());
     }
     if (lockNode) {
        lockNode->_pmutex.unlock();
