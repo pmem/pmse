@@ -177,7 +177,9 @@ class PmseMap {
     }
 
     void deinitialize() {
-        // TODO(kfilipek): deallocate all resources
+        for (int i = 0; i < _size; i++) {
+            delete_persistent<PmseListIntPtr>(_list[i]);
+        }
     }
 
     uint64_t fillment() {
@@ -277,9 +279,7 @@ class PmseMap {
                 if (_counter != std::numeric_limits<uint64_t>::max()-1) {
                     this->_counter++;
                     try {
-                        transaction::exec_tx(pop, [this, &temp] {
                             temp = make_persistent<KVPair>();
-                        });
                         temp->idValue = _counter;
                     } catch (std::exception &e) {
                         std::cout << "Next id generation: " << e.what() << std::endl;
