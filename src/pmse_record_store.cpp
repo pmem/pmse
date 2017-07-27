@@ -128,21 +128,21 @@ StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
     persistent_ptr<InitData> obj;
     uint64_t id = 0;
     try {
-        transaction::exec_tx(_mapPool, [&obj, len, data] {
+        transaction::exec_tx(_mapPool, [this, &obj, len, data, &id] {
             obj = pmemobj_tx_alloc(sizeof(InitData::size) + len, 1);
+            obj->size = len;
+            memcpy(obj->data, data, len);
+            id = _mapper->insert(obj);
         });
-        obj->size = len;
-        memcpy(obj->data, data, len);
     } catch (std::exception &e) {
         log() << "RecordStore: " << e.what();
         return StatusWith<RecordId>(ErrorCodes::OperationFailed,
                                     "Insert record error");
     }
-    id = _mapper->insert(obj);
-    _mapper->changeSize(len);
     if (!id)
         return StatusWith<RecordId>(ErrorCodes::OperationFailed,
                                     "Null record Id!");
+    _mapper->changeSize(len);
     txn->recoveryUnit()->registerChange(new InsertChange(_mapper, RecordId(id), len));
     deleteCappedAsNeeded(txn);
     while (_mapper->dataSize() > _storageSize) {
