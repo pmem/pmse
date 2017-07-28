@@ -81,7 +81,7 @@ PmseRecordStore::PmseRecordStore(StringData ns,
                 _mapPool = pool<root>::create(mapper_filename, "pmse_mapper",
                                               (ns.toString() == "local.startup_log" ||
                                                ns.toString() == "_mdb_catalog" ? 40 : 80)
-                                              * PMEMOBJ_MIN_POOL);
+                                              * PMEMOBJ_MIN_POOL, 0664);
             } catch (std::exception &e) {
                 log() << "Error handled: " << e.what();
                 throw;
