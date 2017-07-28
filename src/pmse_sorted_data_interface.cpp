@@ -63,7 +63,7 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
             std::string filepath = _dbpath.toString() + ident.toString();
             if (!boost::filesystem::exists(filepath)) {
                 _pm_pool = pool<PmseTree>::create(filepath.c_str(), "pmse_index",
-                                                  30 * PMEMOBJ_MIN_POOL, 0666);
+                                                  30 * PMEMOBJ_MIN_POOL, 0664);
             } else {
                 _pm_pool = pool<PmseTree>::open(filepath.c_str(), "pmse_index");
             }
