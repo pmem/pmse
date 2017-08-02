@@ -269,7 +269,6 @@ class PmseMap {
     }
 
     persistent_ptr<KVPair> getNextId() {
-            stdx::lock_guard<nvml::obj::mutex> guard(_pmutex);
             persistent_ptr<KVPair> temp = nullptr;
             if (_deleted == nullptr) {
                 if (_counter != std::numeric_limits<uint64_t>::max()-1) {
@@ -286,6 +285,7 @@ class PmseMap {
                     return nullptr;
                 }
             } else {
+                stdx::lock_guard<nvml::obj::mutex> guard(_pmutex);
                 temp = _deleted;
                 _deleted = _deleted->next;
                 temp->isDeleted = false;
