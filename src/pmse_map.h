@@ -279,7 +279,7 @@ class PmseMap {
                 if (_counter != std::numeric_limits<uint64_t>::max()-1) {
                     this->_counter++;
                     try {
-                            temp = make_persistent<KVPair>();
+                        temp = make_persistent<KVPair>();
                         temp->idValue = _counter;
                     } catch (std::exception &e) {
                         std::cout << "Next id generation: " << e.what() << std::endl;
