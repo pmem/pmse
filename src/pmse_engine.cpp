@@ -54,7 +54,7 @@ PmseEngine::PmseEngine(std::string dbpath) : _dbPath(dbpath) {
     std::string path = _dbPath+_kIdentFilename.toString();
     if (!boost::filesystem::exists(path)) {
         pop = pool<PmseList>::create(path, "pmse_identlist", 4 * PMEMOBJ_MIN_POOL,
-                                         S_IRWXU);
+                                         0664);
         log() << "Engine pool created";
     } else {
         pop = pool<PmseList>::open(path, "pmse_identlist");

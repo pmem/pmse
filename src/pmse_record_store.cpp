@@ -81,7 +81,7 @@ PmseRecordStore::PmseRecordStore(StringData ns,
                 _mapPool = pool<root>::create(mapper_filename, "pmse_mapper",
                                               (ns.toString() == "local.startup_log" ||
                                                ns.toString() == "_mdb_catalog" ? 40 : 80)
-                                              * PMEMOBJ_MIN_POOL);
+                                              * PMEMOBJ_MIN_POOL, 0664);
             } catch (std::exception &e) {
                 log() << "Error handled: " << e.what();
                 throw;
@@ -128,7 +128,7 @@ StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
     persistent_ptr<InitData> obj;
     uint64_t id = 0;
     try {
-        transaction::exec_tx(_mapPool, [&obj, len, data] {
+        transaction::exec_tx(_mapPool, [this, &obj, len, data, &id] {
             obj = pmemobj_tx_alloc(sizeof(InitData::size) + len, 1);
         });
         obj->size = len;
@@ -143,6 +143,7 @@ StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
     if (!id)
         return StatusWith<RecordId>(ErrorCodes::OperationFailed,
                                     "Null record Id!");
+    _mapper->changeSize(len);
     txn->recoveryUnit()->registerChange(new InsertChange(_mapper, RecordId(id), len));
     deleteCappedAsNeeded(txn);
     while (_mapper->dataSize() > _storageSize) {

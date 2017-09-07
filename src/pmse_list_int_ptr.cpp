@@ -63,7 +63,6 @@ uint64_t PmseListIntPtr::size() {
 
 void PmseListIntPtr::insertKV(const persistent_ptr<KVPair> &key,
                               const persistent_ptr<InitData> &value, bool insertToFront) {
-    transaction::exec_tx(_pop, [this, &key, &value, insertToFront] {
         if (insertToFront) {
             key->ptr = value;
             key->next = nullptr;
@@ -87,7 +86,6 @@ void PmseListIntPtr::insertKV(const persistent_ptr<KVPair> &key,
             }
             _size++;
         }
-    });
 }
 
 int64_t PmseListIntPtr::deleteKV(uint64_t key,

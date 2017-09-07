@@ -177,7 +177,9 @@ class PmseMap {
     }
 
     void deinitialize() {
-        // TODO(kfilipek): deallocate all resources
+        for (int i = 0; i < _size; i++) {
+            delete_persistent<PmseListIntPtr>(_list[i]);
+        }
     }
 
     uint64_t fillment() {
@@ -272,15 +274,12 @@ class PmseMap {
     }
 
     persistent_ptr<KVPair> getNextId() {
-            stdx::lock_guard<nvml::obj::mutex> guard(_pmutex);
             persistent_ptr<KVPair> temp = nullptr;
             if (_deleted == nullptr) {
                 if (_counter != std::numeric_limits<uint64_t>::max()-1) {
                     this->_counter++;
                     try {
-                        transaction::exec_tx(pop, [this, &temp] {
-                            temp = make_persistent<KVPair>();
-                        });
+                        temp = make_persistent<KVPair>();
                         temp->idValue = _counter;
                     } catch (std::exception &e) {
                         std::cout << "Next id generation: " << e.what() << std::endl;
@@ -290,6 +289,7 @@ class PmseMap {
                     return nullptr;
                 }
             } else {
+                stdx::lock_guard<nvml::obj::mutex> guard(_pmutex);
                 temp = _deleted;
                 _deleted = _deleted->next;
                 temp->isDeleted = false;
