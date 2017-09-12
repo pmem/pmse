@@ -119,8 +119,10 @@ PmseRecordStore::PmseRecordStore(StringData ns,
 }
 
 StatusWith<RecordId> PmseRecordStore::insertRecord(OperationContext* txn,
-                                                      const char* data, int len,
-                                                      bool enforceQuota) {
+                                                   const char* data,
+                                                   int len,
+                                                   Timestamp timestamp,
+                                                   bool enforceQuota) {
     if (isCapped() && len > static_cast<int>(_mapper->getMax())) {
         return StatusWith<RecordId>(ErrorCodes::BadValue,
                                     "object to insert exceeds cappedMaxSize");
@@ -231,6 +233,7 @@ void PmseRecordStore::deleteCappedAsNeeded(OperationContext* txn) {
 
 Status PmseRecordStore::insertRecordsWithDocWriter(OperationContext* txn,
                                                    const DocWriter* const* docs,
+                                                   const Timestamp* timestamps,
                                                    size_t nDocs,
                                                    RecordId* idsOut) {
     // TODO(kfilipek): Implement insertRecordsWithDocWriter
