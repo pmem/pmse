@@ -63,7 +63,8 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
             std::string filepath = _dbpath.toString() + ident.toString();
             if (!boost::filesystem::exists(filepath)) {
                 _pm_pool = pool<PmseTree>::create(filepath.c_str(), "pmse_index",
-                                                  30 * PMEMOBJ_MIN_POOL, 0664);
+                                                  (isSystemCollection(desc->parentNS()) ? 10 : 30)
+                                                  * PMEMOBJ_MIN_POOL, 0664);
             } else {
                 _pm_pool = pool<PmseTree>::open(filepath.c_str(), "pmse_index");
             }
@@ -158,6 +159,12 @@ class PmseSortedDataBuilderInterface : public SortedDataBuilderInterface {
 SortedDataBuilderInterface* PmseSortedDataInterface::getBulkBuilder(
                 OperationContext* txn, bool dupsAllowed) {
     return new PmseSortedDataBuilderInterface(txn, this, dupsAllowed);
+}
+
+bool PmseSortedDataInterface::isSystemCollection(const StringData& ns) {
+    return ns.toString() == "local.startup_log" ||
+           ns.toString() == "admin.system.version" ||
+           ns.toString() == "_mdb_catalog";
 }
 
 }  // namespace mongo

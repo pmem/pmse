@@ -96,6 +96,7 @@ class PmseSortedDataInterface : public SortedDataInterface {
                     OperationContext* txn, bool isForward) const;
 
  private:
+    static bool isSystemCollection(const StringData& ns);
     StringData _dbpath;
     pool<PmseTree> _pm_pool;
     persistent_ptr<PmseTree> _tree;
