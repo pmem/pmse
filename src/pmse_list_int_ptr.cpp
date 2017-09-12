@@ -42,6 +42,7 @@
 #include "pmse_list_int_ptr.h"
 
 #include "mongo/db/storage/recovery_unit.h"
+
 #include "mongo/util/log.h"
 
 namespace mongo {

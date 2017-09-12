@@ -131,11 +131,14 @@ class PmseRecordStore : public RecordStore {
     virtual void deleteRecord(OperationContext* txn, const RecordId& dl);
 
     virtual StatusWith<RecordId> insertRecord(OperationContext* txn,
-                                              const char* data, int len,
+                                              const char* data,
+                                              int len,
+                                              Timestamp timestamp,
                                               bool enforceQuota);
 
     virtual Status insertRecordsWithDocWriter(OperationContext* txn,
                                               const DocWriter* const* docs,
+                                              const Timestamp* timestamps,
                                               size_t nDocs,
                                               RecordId* idsOut = nullptr);
 

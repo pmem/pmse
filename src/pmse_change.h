@@ -40,6 +40,7 @@
 #include "pmse_tree.h"
 
 #include "mongo/db/index/index_descriptor.h"
+#include "mongo/db/storage/record_data.h"
 #include "mongo/db/record_id.h"
 
 namespace mongo {
