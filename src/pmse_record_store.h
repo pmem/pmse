@@ -219,6 +219,7 @@ class PmseRecordStore : public RecordStore {
 
  private:
     void deleteCappedAsNeeded(OperationContext* txn);
+    static bool isSystemCollection(const StringData& ns);
     CappedCallback* _cappedCallback;
     int64_t _storageSize = baseSize;
     CollectionOptions _options;

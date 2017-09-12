@@ -80,8 +80,7 @@ PmseRecordStore::PmseRecordStore(StringData ns,
         if (!boost::filesystem::exists(mapper_filename.c_str())) {
             try {
                 _mapPool = pool<root>::create(mapper_filename, "pmse_mapper",
-                                              (ns.toString() == "local.startup_log" ||
-                                               ns.toString() == "_mdb_catalog" ? 40 : 80)
+                                              (isSystemCollection(ns) ? 40 : 80)
                                               * PMEMOBJ_MIN_POOL, 0664);
             } catch (std::exception &e) {
                 log() << "Error handled: " << e.what();
@@ -101,10 +100,11 @@ PmseRecordStore::PmseRecordStore(StringData ns,
     auto mapper_root = _mapPool.get_root();
 
     if (!mapper_root->kvmap_root_ptr) {
-        transaction::exec_tx(_mapPool, [mapper_root, options] {
+        transaction::exec_tx(_mapPool, [mapper_root, options, ns] {
             mapper_root->kvmap_root_ptr = make_persistent<PmseMap<InitData>>(options.capped,
                                                                              options.cappedMaxDocs,
-                                                                             options.cappedSize);
+                                                                             options.cappedSize,
+                                                                             isSystemCollection(ns));
         });
         mapper_root->kvmap_root_ptr->initialize(true);
     } else {
@@ -486,11 +486,17 @@ void PmseRecordCursor::moveBackward() {
 }
 
 bool PmseRecordCursor::checkPosition() {
-        if (_cur != nullptr && _cur->position != _position) {  // Can come back to list, but with another pos
-            return false;
-        }
-        return true;
+    if (_cur != nullptr && _cur->position != _position) {  // Can come back to list, but with another pos
+        return false;
     }
+    return true;
+}
+
+bool PmseRecordStore::isSystemCollection(const StringData& ns) {
+    return ns.toString() == "local.startup_log" ||
+           ns.toString() == "admin.system.version" ||
+           ns.toString() == "_mdb_catalog";
+}
 
 }  // namespace mongo
 

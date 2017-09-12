@@ -68,8 +68,8 @@ class PmseMap {
  public:
     PmseMap() = default;
 
-    PmseMap(bool isCapped, uint64_t maxDoc, uint64_t sizeOfColl, uint64_t size = HASHMAP_SIZE)
-        : _size(isCapped ? CAPPED_SIZE : size), _isCapped(isCapped) {
+    PmseMap(bool isCapped, uint64_t maxDoc, uint64_t sizeOfColl, bool decreaseSize = false, uint64_t size = HASHMAP_SIZE)
+        : _size(isCapped ? CAPPED_SIZE : (decreaseSize ? size/100 : size)), _isCapped(isCapped) {
         _maxDocuments = maxDoc;
         _sizeOfCollection = sizeOfColl;
         try {
