@@ -158,8 +158,24 @@ void PmseList::clear() {
     });
 }
 
-void PmseList::setPool(pool<PmseList> pool_obj) {
+void PmseList::setPool(pool<list_root> pool_obj) {
     this->pool_obj = pool_obj;
+}
+
+bool PmseList::isAfterSafeShutdown() {
+    return _afterSafeShutdown;
+}
+
+void PmseList::resetState() {
+    transaction::exec_tx(pool_obj, [this] {
+        _afterSafeShutdown = false;
+    });
+}
+
+void PmseList::safeShutdown() {
+    transaction::exec_tx(pool_obj, [this] {
+        _afterSafeShutdown = true;
+    });
 }
 
 }  // namespace mongo
