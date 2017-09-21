@@ -268,6 +268,16 @@ class PmseMap {
         _counter = _hashmapSize + deletedSize;
     }
 
+    void restoreCounters() {
+        _hashmapSize = _pmHashmapSize;
+        _counter = _pmCounter;
+    }
+
+    void storeCounters() {
+        _pmHashmapSize = _hashmapSize.load();
+        _pmCounter = _counter.load();
+    }
+
     nvml::obj::mutex _listMutex[HASHMAP_SIZE];
 
  private:
@@ -277,6 +287,8 @@ class PmseMap {
     p<uint64_t> _dataSize = 0;
     std::atomic<uint64_t> _counter = {1};
     std::atomic<uint64_t> _hashmapSize = {0};
+    p<uint64_t> _pmCounter;
+    p<uint64_t> _pmHashmapSize;
     p<uint64_t> _maxDocuments;
     p<uint64_t> _sizeOfCollection;
     persistent_ptr<persistent_ptr<PmseListIntPtr>[]> _list;

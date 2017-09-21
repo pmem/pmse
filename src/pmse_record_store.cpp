@@ -112,6 +112,8 @@ PmseRecordStore::PmseRecordStore(StringData ns,
             mapper_root->kvmap_root_ptr->initialize(false);
             if (recoveryNeeded) {
                 mapper_root->kvmap_root_ptr->recover();
+            } else {
+                mapper_root->kvmap_root_ptr->restoreCounters();
             }
         });
     }
