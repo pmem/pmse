@@ -126,7 +126,8 @@ Status PmseEngine::createSortedDataInterface(OperationContext* opCtx,
 SortedDataInterface* PmseEngine::getSortedDataInterface(OperationContext* opCtx,
                                                         StringData ident,
                                                         const IndexDescriptor* desc) {
-    return new PmseSortedDataInterface(ident, desc, _dbPath, &_poolHandler);
+    return new PmseSortedDataInterface(ident, desc, _dbPath,
+                                       &_poolHandler, (_needCheck ? true : false));
 }
 
 Status PmseEngine::dropIdent(OperationContext* opCtx, StringData ident) {

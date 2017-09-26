@@ -162,7 +162,7 @@ void InsertIndexChange::rollback() {
         transaction::exec_tx(_pop, [this] {
             IndexKeyEntry entry(_key.getOwned(), _loc);
             _tree->remove(_pop, entry, _dupsAllowed, _desc->keyPattern(), nullptr);
-            --_tree->_records;
+            _tree->_records.fetch_sub(1);
         });
     } catch (std::exception &e) {
         log() << e.what();
@@ -179,7 +179,7 @@ void RemoveIndexChange::rollback() {
     IndexKeyEntry entry(_key.getOwned(), _loc);
     status = _tree->insert(_pop, entry, _ordering, _dupsAllowed);
     if (status == Status::OK()) {
-        ++_tree->_records;
+        _tree->_records.fetch_add(1);
     }
 }
 
