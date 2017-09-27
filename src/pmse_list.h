@@ -60,7 +60,7 @@ struct _values {
     char id[256];
     char value[256];
 };
-struct list_root;
+struct ListRoot;
 
 class PmseList {
  public:
@@ -69,7 +69,7 @@ class PmseList {
         persistent_ptr<_pair> next;
     };
     typedef struct _pair KVPair;
-    explicit PmseList(pool<list_root> obj) : _afterSafeShutdown(true), pool_obj(obj) {}
+    explicit PmseList(pool<ListRoot> obj) : _afterSafeShutdown(true), pool_obj(obj) {}
     PmseList() = delete;
     ~PmseList() = default;
     void insertKV(const char key[], const  char value[]);
@@ -79,7 +79,7 @@ class PmseList {
     std::vector<std::string> getKeys();
     const char* find(const char key[], bool &status);
     void clear();
-    void setPool(pool<list_root> pool_obj);
+    void setPool(pool<ListRoot> pool_obj);
     bool isAfterSafeShutdown();
     void safeShutdown();
     void resetState();
@@ -88,11 +88,11 @@ class PmseList {
     p<uint64_t> counter;
     persistent_ptr<KVPair> head;
     persistent_ptr<KVPair> tail;
-    pool<list_root> pool_obj;
+    pool<ListRoot> pool_obj;
     nvml::obj::mutex _pmutex;
 };
 
-struct list_root {
+struct ListRoot {
     persistent_ptr<PmseList> list_root_ptr;
 };
 
