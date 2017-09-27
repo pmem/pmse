@@ -37,6 +37,7 @@
 #include "pmse_change.h"
 
 #include <list>
+#include <utility>
 
 #include "mongo/platform/basic.h"
 #include "mongo/db/storage/sorted_data_interface.h"
@@ -298,9 +299,7 @@ persistent_ptr<PmseTreeNode> PmseTree::coalesceNodes(
     IndexKeyEntry k_prime_temp(k_prime.getBSON(), RecordId((k_prime).loc));
     // Swap neighbor with node if node is on the extreme left and neighbor is to its right.
     if (neighbor_index == -1) {
-        tmp = n;
-        n = neighbor;
-        neighbor = tmp;
+        std::swap(n, neighbor);
     }
 
     /*
@@ -886,6 +885,23 @@ Status PmseTree::insert(pool_base pop, IndexKeyEntry& entry,
     }
     unlockTree(locks);
     return Status::OK();
+}
+
+uint64_t PmseTree::countElements() {
+    if (!isEmpty()) {
+        auto leaf = _first;
+        uint64_t counter = 0;
+        while (leaf) {
+            counter += leaf->num_keys;
+            leaf = leaf->next;
+        }
+        return counter;
+    }
+    return 0;
+}
+
+bool PmseTree::isEmpty() {
+    return _first == nullptr;
 }
 
 }  // namespace mongo

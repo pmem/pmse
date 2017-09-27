@@ -162,7 +162,6 @@ void InsertIndexChange::rollback() {
         transaction::exec_tx(_pop, [this] {
             IndexKeyEntry entry(_key.getOwned(), _loc);
             _tree->remove(_pop, entry, _dupsAllowed, _desc->keyPattern(), nullptr);
-            --_tree->_records;
         });
     } catch (std::exception &e) {
         log() << e.what();
@@ -178,9 +177,6 @@ void RemoveIndexChange::rollback() {
     Status status = Status::OK();
     IndexKeyEntry entry(_key.getOwned(), _loc);
     status = _tree->insert(_pop, entry, _ordering, _dupsAllowed);
-    if (status == Status::OK()) {
-        ++_tree->_records;
-    }
 }
 
 }  // namespace mongo

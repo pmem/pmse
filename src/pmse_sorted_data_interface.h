@@ -69,7 +69,7 @@ class PmseSortedDataInterface : public SortedDataInterface {
 
     virtual void fullValidate(OperationContext* txn, long long* numKeysOut,
                               ValidateResults* fullResults) const {
-        *numKeysOut = _tree->_records;
+        *numKeysOut = _tree->countElements();
         // TODO(kfilipek): Implement fullValidate
     }
 
@@ -85,7 +85,7 @@ class PmseSortedDataInterface : public SortedDataInterface {
     }
 
     virtual bool isEmpty(OperationContext* txn) {
-        return _tree->_records == 0 ? true : false;
+        return _tree->isEmpty();
     }
 
     virtual Status initAsEmpty(OperationContext* txn) {
@@ -96,7 +96,6 @@ class PmseSortedDataInterface : public SortedDataInterface {
                     OperationContext* txn, bool isForward) const;
 
  private:
-    void moveToNext();
     StringData _dbpath;
     pool<PmseTree> _pm_pool;
     persistent_ptr<PmseTree> _tree;
