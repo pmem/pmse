@@ -152,7 +152,7 @@ class PmseEngine : public KVEngine {
     const std::string _dbPath;
     PMEMobjpool *pm_pool = NULL;
     const StringData _kIdentFilename = "pmkv.pm";
-    pool<list_root> pop;
+    pool<ListRoot> pop;
     persistent_ptr<PmseList> _identList;
 };
 }  // namespace mongo

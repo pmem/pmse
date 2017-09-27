@@ -158,7 +158,7 @@ void PmseList::clear() {
     });
 }
 
-void PmseList::setPool(pool<list_root> pool_obj) {
+void PmseList::setPool(pool<ListRoot> pool_obj) {
     this->pool_obj = pool_obj;
 }
 

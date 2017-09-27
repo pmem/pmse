@@ -304,7 +304,10 @@ class PmseMap {
 
     persistent_ptr<KVPair> getNextId() {
         persistent_ptr<KVPair> temp = nullptr;
-        if (_deleted == nullptr && _counter < std::numeric_limits<uint64_t>::max()) {
+        if (_deleted == nullptr) {
+            if (_counter == std::numeric_limits<uint64_t>::max()) {
+                return nullptr;
+            }
             auto newId = _counter.fetch_add(1);
             try {
                 temp = make_persistent<KVPair>();
