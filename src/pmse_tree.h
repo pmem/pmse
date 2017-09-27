@@ -111,7 +111,10 @@ class PmseTree {
                   const BSONObj& _ordering, bool dupsAllowed);
     bool remove(pool_base pop, IndexKeyEntry& entry,
                 bool dupsAllowed, const BSONObj& _ordering, OperationContext* txn);
-    p<int64_t> _records = 0;
+
+    uint64_t countElements();
+
+    bool isEmpty();
 
  private:
     void unlockTree(std::list<LocksPtr>& locks);
