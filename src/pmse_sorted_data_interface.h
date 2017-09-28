@@ -53,7 +53,10 @@ class PmseSortedDataInterface : public SortedDataInterface {
  public:
     PmseSortedDataInterface(StringData ident, const IndexDescriptor* desc,
                             StringData dbpath, std::map<std::string,
-                            pool_base> *pool_handler);
+                            pool_base> *pool_handler,
+                            bool recoveryNeeded = false);
+
+    ~PmseSortedDataInterface();
 
     virtual SortedDataBuilderInterface* getBulkBuilder(OperationContext* txn,
                                                        bool dupsAllowed);
@@ -69,7 +72,7 @@ class PmseSortedDataInterface : public SortedDataInterface {
 
     virtual void fullValidate(OperationContext* txn, long long* numKeysOut,
                               ValidateResults* fullResults) const {
-        *numKeysOut = _tree->_records;
+        *numKeysOut = _tree->_records.load();
         // TODO(kfilipek): Implement fullValidate
     }
 
@@ -85,7 +88,7 @@ class PmseSortedDataInterface : public SortedDataInterface {
     }
 
     virtual bool isEmpty(OperationContext* txn) {
-        return _tree->_records == 0 ? true : false;
+        return _tree->_records.load() == 0 ? true : false;
     }
 
     virtual Status initAsEmpty(OperationContext* txn) {

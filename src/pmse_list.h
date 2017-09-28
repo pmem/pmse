@@ -60,6 +60,7 @@ struct _values {
     char id[256];
     char value[256];
 };
+struct list_root;
 
 class PmseList {
  public:
@@ -68,7 +69,7 @@ class PmseList {
         persistent_ptr<_pair> next;
     };
     typedef struct _pair KVPair;
-    explicit PmseList(pool<PmseList> obj) : pool_obj(obj) {}
+    explicit PmseList(pool<list_root> obj) : _afterSafeShutdown(true), pool_obj(obj) {}
     PmseList() = delete;
     ~PmseList() = default;
     void insertKV(const char key[], const  char value[]);
@@ -78,13 +79,21 @@ class PmseList {
     std::vector<std::string> getKeys();
     const char* find(const char key[], bool &status);
     void clear();
-    void setPool(pool<PmseList> pool_obj);
+    void setPool(pool<list_root> pool_obj);
+    bool isAfterSafeShutdown();
+    void safeShutdown();
+    void resetState();
  private:
+    p<bool> _afterSafeShutdown = true;
+    p<uint64_t> counter;
     persistent_ptr<KVPair> head;
     persistent_ptr<KVPair> tail;
-    p<uint64_t> counter;
-    pool<PmseList> pool_obj;
+    pool<list_root> pool_obj;
     nvml::obj::mutex _pmutex;
+};
+
+struct list_root {
+    persistent_ptr<PmseList> list_root_ptr;
 };
 
 }  // namespace mongo

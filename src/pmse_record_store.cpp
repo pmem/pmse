@@ -59,7 +59,8 @@ PmseRecordStore::PmseRecordStore(StringData ns,
                                  StringData ident,
                                  const CollectionOptions& options,
                                  StringData dbpath,
-                                 std::map<std::string, pool_base> *pool_handler)
+                                 std::map<std::string, pool_base> *pool_handler,
+                                 bool recoveryNeeded)
     : RecordStore(ns), _cappedCallback(nullptr),
       _options(options), _dbPath(dbpath) {
     log() << "ns: " << ns;
@@ -107,8 +108,13 @@ PmseRecordStore::PmseRecordStore(StringData ns,
         });
         mapper_root->kvmap_root_ptr->initialize(true);
     } else {
-        transaction::exec_tx(_mapPool, [mapper_root] {
+        transaction::exec_tx(_mapPool, [mapper_root, recoveryNeeded] {
             mapper_root->kvmap_root_ptr->initialize(false);
+            if (recoveryNeeded) {
+                mapper_root->kvmap_root_ptr->recover();
+            } else {
+                mapper_root->kvmap_root_ptr->restoreCounters();
+            }
         });
     }
     try {

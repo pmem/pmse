@@ -53,20 +53,32 @@ namespace mongo {
 PmseEngine::PmseEngine(std::string dbpath) : _dbPath(dbpath) {
     std::string path = _dbPath+_kIdentFilename.toString();
     if (!boost::filesystem::exists(path)) {
-        pop = pool<PmseList>::create(path, "pmse_identlist", 4 * PMEMOBJ_MIN_POOL,
-                                         0664);
+        pop = pool<list_root>::create(path, "pmse_identlist", 4 * PMEMOBJ_MIN_POOL,
+                                      0664);
         log() << "Engine pool created";
     } else {
-        pop = pool<PmseList>::open(path, "pmse_identlist");
+        pop = pool<list_root>::open(path, "pmse_identlist");
         log() << "Engine pool opened";
     }
 
     try {
-        _identList = pop.get_root();
+        auto root = pop.get_root();
+        if (!root->list_root_ptr) {
+            transaction::exec_tx(pop, [this, &root] {
+                root->list_root_ptr = make_persistent<PmseList>(pop);
+            });
+        }
+        _identList = root->list_root_ptr;
     } catch (std::exception& e) {
         log() << "Error while creating PMSE engine:" << e.what() << std::endl;
     }
     _identList->setPool(pop);
+    if(!_identList->isAfterSafeShutdown()) {
+        _needCheck = true;
+    } else {
+        _needCheck = false;
+    }
+    _identList->resetState();
 }
 
 PmseEngine::~PmseEngine() {
@@ -94,7 +106,8 @@ std::unique_ptr<RecordStore> PmseEngine::getRecordStore(OperationContext* opCtx,
                                                         StringData ident,
                                                         const CollectionOptions& options) {
     _identList->update(ident.toString().c_str(), ns.toString().c_str());
-    return stdx::make_unique<PmseRecordStore>(ns, ident, options, _dbPath, &_poolHandler);
+    return stdx::make_unique<PmseRecordStore>(ns, ident, options, _dbPath,
+                                              &_poolHandler, (_needCheck ? true : false));
 }
 
 Status PmseEngine::createSortedDataInterface(OperationContext* opCtx,
@@ -113,7 +126,8 @@ Status PmseEngine::createSortedDataInterface(OperationContext* opCtx,
 SortedDataInterface* PmseEngine::getSortedDataInterface(OperationContext* opCtx,
                                                         StringData ident,
                                                         const IndexDescriptor* desc) {
-    return new PmseSortedDataInterface(ident, desc, _dbPath, &_poolHandler);
+    return new PmseSortedDataInterface(ident, desc, _dbPath,
+                                       &_poolHandler, (_needCheck ? true : false));
 }
 
 Status PmseEngine::dropIdent(OperationContext* opCtx, StringData ident) {

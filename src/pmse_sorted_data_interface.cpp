@@ -54,7 +54,8 @@ const int TempKeyMaxSize = 1024;
 PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
                                                  const IndexDescriptor* desc,
                                                  StringData dbpath,
-                                                 std::map<std::string, pool_base> *pool_handler)
+                                                 std::map<std::string, pool_base> *pool_handler,
+                                                 bool recoveryNeeded)
     : _dbpath(dbpath), _desc(desc) {
     try {
         if (pool_handler->count(ident.toString()) > 0) {
@@ -71,10 +72,30 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
                                                                    _pm_pool));
         }
         _tree = _pm_pool.get_root();
+
+        if (recoveryNeeded) {
+            if (_tree != nullptr) {
+                auto leaf = _tree->_first;
+                uint64_t counter = 0;
+                while (leaf) {
+                    counter += leaf->num_keys;
+                    leaf = leaf->next;
+                }
+                _tree->_records.store(counter);
+            }
+        } else {
+            _tree->_records.store(_tree->_records_stored);
+        }
     } catch (std::exception &e) {
         log() << "Error handled: " << e.what();
         throw Status(ErrorCodes::CannotCreateIndex, "Cannot create/open pool while creating index");
     }
+}
+
+PmseSortedDataInterface::~PmseSortedDataInterface() {
+    transaction::exec_tx(_pm_pool, [this] {
+        _tree->_records_stored = _tree->_records.load();
+    });
 }
 
 /*
@@ -86,11 +107,10 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
                                        bool dupsAllowed) {
     BSONObj owned = key.getOwned();
     Status status = Status::OK();
-    persistent_ptr<char> obj;
 
     if (key.objsize() >= TempKeyMaxSize) {
         std::string msg = mongoutils::str::stream()
-            << "PMSE::insert: key too large to index, failing " << ' '
+            << "PMSE::insert: key too large to index, failing "
             << key.objsize() << ' ' << key;
         return Status(ErrorCodes::KeyTooLong, msg);
     }
@@ -98,8 +118,10 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
         IndexKeyEntry entry(key.getOwned(), loc);
         status = _tree->insert(_pm_pool, entry, _desc->keyPattern(), dupsAllowed);
         if (status == Status::OK()) {
-            ++_tree->_records;
-            txn->recoveryUnit()->registerChange(new InsertIndexChange(_tree, _pm_pool, key, loc, dupsAllowed, _desc));
+            _tree->_records.fetch_add(1);
+            txn->recoveryUnit()->registerChange(new InsertIndexChange(_tree, _pm_pool,
+                                                                      key, loc,
+                                                                      dupsAllowed, _desc));
         }
     } catch (std::exception &e) {
         log() << e.what();
@@ -115,9 +137,8 @@ void PmseSortedDataInterface::unindex(OperationContext* txn, const BSONObj& key,
     IndexKeyEntry entry(key.getOwned(), loc);
     try {
         transaction::exec_tx(_pm_pool, [this, &entry, dupsAllowed, txn] {
-            if (_tree->remove(_pm_pool, entry, dupsAllowed,
-                             _desc->keyPattern(), txn))
-                --_tree->_records;
+            if (_tree->remove(_pm_pool, entry, dupsAllowed, _desc->keyPattern(), txn))
+                _tree->_records.fetch_sub(1);
         });
     } catch (std::exception &e) {
         log() << e.what();

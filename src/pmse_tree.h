@@ -43,6 +43,8 @@
 #include <libpmemobj++/transaction.hpp>
 #include <libpmemobj++/shared_mutex.hpp>
 
+#include <atomic>
+
 #include "mongo/db/storage/sorted_data_interface.h"
 #include "mongo/db/index/index_descriptor.h"
 
@@ -105,13 +107,14 @@ class LocksPtr {
 
 class PmseTree {
     friend class PmseCursor;
+    friend class PmseSortedDataInterface;
 
  public:
     Status insert(pool_base pop, IndexKeyEntry& entry,
                   const BSONObj& _ordering, bool dupsAllowed);
     bool remove(pool_base pop, IndexKeyEntry& entry,
                 bool dupsAllowed, const BSONObj& _ordering, OperationContext* txn);
-    p<int64_t> _records = 0;
+    std::atomic<int64_t> _records = {0};
 
  private:
     void unlockTree(std::list<LocksPtr>& locks);
@@ -168,6 +171,7 @@ class PmseTree {
     persistent_ptr<PmseTreeNode> _root;
     persistent_ptr<PmseTreeNode> _first;
     persistent_ptr<PmseTreeNode> _last;
+    p<int64_t> _records_stored;
     BSONObj _ordering;
 };
 

@@ -137,18 +137,22 @@ class PmseEngine : public KVEngine {
         return _identList->getKeys();
     }
 
-    virtual void cleanShutdown() {}
+    virtual void cleanShutdown() {
+        // If not clean shutdown start scanning all collections
+        _identList->safeShutdown();
+    }
 
     void setJournalListener(JournalListener* jl) final {}
 
  private:
     stdx::mutex _pmutex;
+    bool _needCheck;
     std::map<std::string, pool_base> _poolHandler;
     std::shared_ptr<void> _catalogInfo;
     const std::string _dbPath;
     PMEMobjpool *pm_pool = NULL;
     const StringData _kIdentFilename = "pmkv.pm";
-    pool<PmseList> pop;
+    pool<list_root> pop;
     persistent_ptr<PmseList> _identList;
 };
 }  // namespace mongo

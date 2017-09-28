@@ -97,9 +97,12 @@ class PmseRecordStore : public RecordStore {
     PmseRecordStore(StringData ns, StringData ident,
                     const CollectionOptions& options,
                     StringData dbpath,
-                    std::map<std::string, pool_base> *pool_handler);
+                    std::map<std::string, pool_base> *pool_handler,
+                    bool recoveryNeeded = false);
 
-    ~PmseRecordStore() = default;
+    ~PmseRecordStore() {
+        _mapper->storeCounters();
+    }
 
     virtual const char* name() const {
         return storeName.c_str();

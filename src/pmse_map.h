@@ -51,6 +51,7 @@
 #include <libpmemobj++/mutex.hpp>
 #include <libpmemobj++/detail/pexceptions.hpp>
 
+#include <atomic>
 #include <limits>
 
 namespace mongo {
@@ -89,7 +90,7 @@ class PmseMap {
         if (!insertKV(id, value)) {
             return 0;
         }
-        ++_hashmapSize;
+        _hashmapSize.fetch_add(1);
         return id->idValue;
     }
 
@@ -153,7 +154,7 @@ class PmseMap {
     }
 
     bool remove(uint64_t id, OperationContext* txn = nullptr) {
-        _hashmapSize--;
+        _hashmapSize.fetch_sub(1);
         persistent_ptr<KVPair> toDeleted;
         _list[id % _size]->deleteKV(id, toDeleted, txn);
         moveToDeleted(toDeleted, _deleted);
@@ -202,7 +203,7 @@ class PmseMap {
                 initialize(true);
             });
             _counter = 0;
-            _hashmapSize = 0;
+            _hashmapSize = {0};
             _dataSize = 0;
         } catch (nvml::transaction_alloc_error &e) {
             std::cout << e.what() << std::endl;
@@ -251,6 +252,32 @@ class PmseMap {
         return _size;
     }
 
+    void recover() {
+        uint64_t countedSize = 0;
+        uint64_t deletedSize = 0;
+        for(int i = 0; i < _size; i++) {
+            countedSize += _list[i]->size();
+        }
+        _hashmapSize = countedSize;
+        auto cur = _deleted;
+        while(cur) {
+            deletedSize++;
+            cur = cur->next;
+        }
+        // TODO(kfilipek): consider deep recovery (count all physical elements on lists and find max id)
+        _counter = _hashmapSize + deletedSize;
+    }
+
+    void restoreCounters() {
+        _hashmapSize = _pmHashmapSize;
+        _counter = _pmCounter;
+    }
+
+    void storeCounters() {
+        _pmHashmapSize = _hashmapSize.load();
+        _pmCounter = _counter.load();
+    }
+
     nvml::obj::mutex _listMutex[HASHMAP_SIZE];
 
  private:
@@ -258,8 +285,10 @@ class PmseMap {
     const bool _isCapped;
     pool_base pop;
     p<uint64_t> _dataSize = 0;
-    p<uint64_t> _counter = 0;
-    p<uint64_t> _hashmapSize = 0;
+    std::atomic<uint64_t> _counter = {1};
+    std::atomic<uint64_t> _hashmapSize = {0};
+    p<uint64_t> _pmCounter;
+    p<uint64_t> _pmHashmapSize;
     p<uint64_t> _maxDocuments;
     p<uint64_t> _sizeOfCollection;
     persistent_ptr<persistent_ptr<PmseListIntPtr>[]> _list;
@@ -274,29 +303,25 @@ class PmseMap {
     }
 
     persistent_ptr<KVPair> getNextId() {
-            persistent_ptr<KVPair> temp = nullptr;
-            if (_deleted == nullptr) {
-                if (_counter != std::numeric_limits<uint64_t>::max()-1) {
-                    this->_counter++;
-                    try {
-                            temp = make_persistent<KVPair>();
-                        temp->idValue = _counter;
-                    } catch (std::exception &e) {
-                        std::cout << "Next id generation: " << e.what() << std::endl;
-                        return nullptr;
-                    }
-                } else {
-                    return nullptr;
-                }
-            } else {
-                stdx::lock_guard<nvml::obj::mutex> guard(_pmutex);
-                temp = _deleted;
-                _deleted = _deleted->next;
-                temp->isDeleted = false;
-                return temp;
+        persistent_ptr<KVPair> temp = nullptr;
+        if (_deleted == nullptr && _counter < std::numeric_limits<uint64_t>::max()) {
+            auto newId = _counter.fetch_add(1);
+            try {
+                temp = make_persistent<KVPair>();
+                temp->idValue = newId;
+            } catch (std::exception &e) {
+                std::cout << "Next id generation: " << e.what() << std::endl;
+                return nullptr;
             }
+        } else {
+            stdx::lock_guard<nvml::obj::mutex> guard(_pmutex);
+            temp = _deleted;
+            _deleted = _deleted->next;
+            temp->isDeleted = false;
             return temp;
         }
+        return temp;
+    }
 };
 
 struct root {
