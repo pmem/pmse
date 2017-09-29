@@ -114,7 +114,7 @@ void PmseSortedDataInterface::unindex(OperationContext* txn, const BSONObj& key,
     IndexKeyEntry entry(key.getOwned(), loc);
     try {
         transaction::exec_tx(_pm_pool, [this, &entry, dupsAllowed, txn] {
-            _tree->remove(_pm_pool, entry, dupsAllowed, _desc->keyPattern(), txn);
+            _tree->remove(_pm_pool, entry, dupsAllowed, _desc->keyPattern());
         });
     } catch (std::exception &e) {
         log() << e.what();
