@@ -161,7 +161,7 @@ void InsertIndexChange::rollback() {
     try {
         transaction::exec_tx(_pop, [this] {
             IndexKeyEntry entry(_key.getOwned(), _loc);
-            _tree->remove(_pop, entry, _dupsAllowed, _desc->keyPattern(), nullptr);
+            _tree->remove(_pop, entry, _dupsAllowed, _desc->keyPattern());
         });
     } catch (std::exception &e) {
         log() << e.what();
