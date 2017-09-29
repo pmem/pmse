@@ -95,10 +95,10 @@ class PmseCursor final : public SortedDataInterface::Cursor {
         }
         return bb.obj();
     }
-    void locate(const BSONObj& key, const RecordId& loc, std::list<LocksPtr>& locks);
-    void unlockTree(std::list<LocksPtr>& locks);
+    void locate(const BSONObj& key, const RecordId& loc, std::list<nvml::obj::shared_mutex *>& locks);
+    void unlockTree(std::list<nvml::obj::shared_mutex *>& locks);
     void seekEndCursor();
-    bool lower_bound(IndexKeyEntry entry, CursorObject& cursor, std::list<LocksPtr>& locks);
+    bool lower_bound(IndexKeyEntry entry, CursorObject& cursor, std::list<nvml::obj::shared_mutex *>& locks);
     bool previous(CursorObject&);
     void moveToNext();
     bool atOrPastEndPointAfterSeeking();
