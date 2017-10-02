@@ -105,7 +105,7 @@ class PmseTree {
     Status insert(pool_base pop, IndexKeyEntry& entry,
                   const BSONObj& _ordering, bool dupsAllowed);
     bool remove(pool_base pop, IndexKeyEntry& entry,
-                bool dupsAllowed, const BSONObj& _ordering, OperationContext* txn);
+                bool dupsAllowed, const BSONObj& _ordering);
 
     uint64_t countElements();
 
