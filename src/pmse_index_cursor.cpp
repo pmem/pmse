@@ -87,7 +87,9 @@ bool PmseCursor::lower_bound(IndexKeyEntry entry, CursorObject& cursor, std::lis
     }
     locks.push_back(LocksPtr(&(current->_pmutex)));
     i = 0;
-    while (i < current->num_keys && IndexKeyEntry_PM::compareEntries(entry, current->keys[i], _ordering) > 0) {
+    IndexEntryComparison c(Ordering::make(_ordering));
+
+    while (i < current->num_keys && c.compare(entry, IndexKeyEntry(current->keys[i].getBSON(), RecordId(current->keys[i].loc))) > 0) {
             i++;
     }
     // Iterated to end of node without finding bigger value
@@ -367,28 +369,17 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const IndexSeekPoint& seekPoint,
                                                 RequestedInfo parts = kKeyAndLoc) {
     if (!_tree->_root)
         return {};
+
     const BSONObj query = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
     auto discriminator = RecordId::min();
-    bool gt = false;
     std::list<LocksPtr> locks;
-    BSONObjIterator lhsIt(query);
-    while (lhsIt.more()) {
-        const BSONElement l = lhsIt.next();
-        BehaviorIfFieldIsEqual lEqBehavior = BehaviorIfFieldIsEqual(l.fieldName()[0]);
-        if (lEqBehavior) {
-            if (lEqBehavior == greater) {
-                gt = true;
-            }
-        }
-    }
     locate(query, _forward ? RecordId::min() : RecordId::max(), locks);
+
     if (_isEOF) {
         unlockTree(locks);
         return {};
     }
-    if (gt)
-        if (query.woCompare(_cursor.node->keys[_cursor.index].getBSON(), _ordering, false) == 0)
-            next(parts);
+
     if (_cursor.node.raw_ptr()->off != 0) {
         _cursorKey = _cursor.node->keys[_cursor.index].getBSON();
         _cursorId = _cursor.node->keys[_cursor.index].loc;
@@ -396,6 +387,7 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const IndexSeekPoint& seekPoint,
     } else {
         _eofRestore = true;
     }
+
     unlockTree(locks);
     return IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),
                     RecordId((_cursor.node->keys[_cursor.index]).loc));
