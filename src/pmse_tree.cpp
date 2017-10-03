@@ -505,11 +505,11 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
     persistent_ptr<PmseTreeNode> child;
 
     if (current == nullptr)
-            return current;
+            return nullptr;
 
-    if(current->is_leaf){
+    if (current->is_leaf){
         (current->_pmutex).lock();
-        if(current.raw_ptr()->off != _root.raw_ptr()->off)
+        if (current.raw_ptr()->off != _root.raw_ptr()->off)
         {
             (current->_pmutex).unlock();
             current = _root;
@@ -520,7 +520,7 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
         }
     }
     (current->_pmutex).lock_shared();
-    if(current.raw_ptr()->off != _root.raw_ptr()->off)
+    if (current.raw_ptr()->off != _root.raw_ptr()->off)
     {
         (current->_pmutex).unlock_shared();
         (_root->_pmutex).lock_shared();
@@ -536,7 +536,7 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
                 break;
             }
         }
-    if(current->children_array[i]->is_leaf){
+    if (current->children_array[i]->is_leaf){
         (current->children_array[i]->_pmutex).lock();
         locks.push_back(&(current->children_array[i]->_pmutex));
     }
@@ -551,13 +551,13 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
         unlockTree(locks);
         current = _root;
         (current->_pmutex).lock();
-        if(current.raw_ptr()->off != _root.raw_ptr()->off)
+        if (current.raw_ptr()->off != _root.raw_ptr()->off)
         {
             (current->_pmutex).unlock();
             current = _root;
             (current->_pmutex).lock();
         }
-        if(current.raw_ptr()->off != _root.raw_ptr()->off)
+        if (current.raw_ptr()->off != _root.raw_ptr()->off)
         {
             (current->_pmutex).unlock();
             current = _root;
@@ -565,7 +565,7 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
         }
         locks.push_back(&(current->_pmutex));
         if (current == nullptr)
-            return current;
+            return nullptr;
 
         while (!current->is_leaf) {
             i = 0;
@@ -916,7 +916,6 @@ Status PmseTree::insert(pool_base pop, IndexKeyEntry& entry,
      * There is place for new value
      */
     if (node->num_keys < (TREE_ORDER)) {
-
         try {
             transaction::exec_tx(pop, [this, &status, &node, &entry, ordering] {
                 status = insertKeyIntoLeaf(node, entry, ordering);
