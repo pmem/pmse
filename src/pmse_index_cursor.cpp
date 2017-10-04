@@ -63,7 +63,7 @@ PmseCursor::PmseCursor(OperationContext* txn, bool isForward,
     // Find entry in tree which is equal or bigger to input entry
     // Locates input cursor on that entry
     // Sets _locateFoundDataEnd when result is after last entry in tree
-bool PmseCursor::lower_bound(IndexKeyEntry entry, CursorObject& cursor, std::list<nvml::obj::shared_mutex *>& locks) {
+bool PmseCursor::lower_bound(IndexKeyEntry entry, CursorObject& cursor, std::list<nvml::obj::shared_mutex*>& locks) {
     uint64_t i = 0;
     int64_t cmp;
     persistent_ptr<PmseTreeNode> current = _tree->_root;
@@ -135,7 +135,7 @@ bool PmseCursor::atOrPastEndPointAfterSeeking() {
     }
 }
 
-void PmseCursor::locate(const BSONObj& key, const RecordId& loc, std::list<nvml::obj::shared_mutex *>& locks) {
+void PmseCursor::locate(const BSONObj& key, const RecordId& loc, std::list<nvml::obj::shared_mutex*>& locks) {
     bool locateFound;
     CursorObject locateCursor;
     _isEOF = false;
@@ -184,7 +184,7 @@ void PmseCursor::seekEndCursor() {
 
     if (!_endState || !_tree->_root)
         return;
-    std::list<nvml::obj::shared_mutex *> locks;
+    std::list<nvml::obj::shared_mutex*> locks;
     found = lower_bound(_endState->query, endCursor, locks);
     if (_locateFoundDataEnd) {
         _endPositionIsDataEnd = true;
@@ -253,7 +253,7 @@ bool PmseCursor::atEndPoint() {
 
 boost::optional<IndexKeyEntry> PmseCursor::next(
                 RequestedInfo parts = kKeyAndLoc) {
-    std::list<nvml::obj::shared_mutex *> locks;
+    std::list<nvml::obj::shared_mutex*> locks;
     if (_wasRestore) {
         locate(_cursorKey, RecordId(_cursorId), locks);
         moveToNext();
@@ -322,7 +322,7 @@ void PmseCursor::moveToNext() {
 }
 
 void PmseCursor::unlockTree(std::list<nvml::obj::shared_mutex*>& locks) {
-    std::list<nvml::obj::shared_mutex *>::const_iterator iterator;
+    std::list<nvml::obj::shared_mutex*>::const_iterator iterator;
     try {
         for (iterator = locks.begin(); iterator != locks.end(); ++iterator) {
             (*iterator)->unlock_shared();
@@ -374,7 +374,7 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const IndexSeekPoint& seekPoint,
 
     const BSONObj query = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
     auto discriminator = RecordId::min();
-    std::list<nvml::obj::shared_mutex *> locks;
+    std::list<nvml::obj::shared_mutex*> locks;
     locate(query, _forward ? RecordId::min() : RecordId::max(), locks);
 
     if (_isEOF) {
