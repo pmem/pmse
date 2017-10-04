@@ -509,7 +509,7 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
 
     if (current->is_leaf){
         (current->_pmutex).lock();
-        if (current.raw_ptr()->off != _root.raw_ptr()->off)
+        if (current != _root)
         {
             (current->_pmutex).unlock();
             current = _root;
@@ -520,7 +520,7 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
         }
     }
     (current->_pmutex).lock_shared();
-    if (current.raw_ptr()->off != _root.raw_ptr()->off)
+    if (current != _root)
     {
         (current->_pmutex).unlock_shared();
         (_root->_pmutex).lock_shared();
@@ -551,7 +551,7 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
         unlockTree(locks);
         current = _root;
         (current->_pmutex).lock();
-        while (current.raw_ptr()->off != _root.raw_ptr()->off)
+        while (current != _root)
         {
             (current->_pmutex).unlock();
             current = _root;
@@ -689,7 +689,7 @@ persistent_ptr<PmseTreeNode> PmseTree::splitFullNodeAndInsert(
     new_leaf->parent = node->parent;
     new_entry = new_leaf->keys[0];
     new_root = insertIntoNodeParent(pop, _root, node, new_entry, new_leaf);
-    if(new_root.raw_ptr()->off!=_root.raw_ptr()->off)
+    if(new_root!=_root)
     {
         new_root->_pmutex.lock();
         locks.push_back(&(new_root->_pmutex));
