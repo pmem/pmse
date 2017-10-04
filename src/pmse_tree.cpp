@@ -634,7 +634,8 @@ persistent_ptr<PmseTreeNode> PmseTree::splitFullNodeAndInsert(
     new_entry = new_leaf->keys[0];
     new_root = insertIntoNodeParent(pop, _root, node, new_entry, new_leaf);
     new_leaf->_pmutex.unlock();
-    _last = new_leaf;
+    if(node == _last)
+        _last = new_leaf;
     return new_root;
 }
 
