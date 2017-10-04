@@ -113,7 +113,7 @@ class PmseTree {
 
  private:
     nvml::obj::mutex globalMutex;
-    void unlockTree(std::list<nvml::obj::shared_mutex *>& locks);
+    void unlockTree(std::list<nvml::obj::shared_mutex*>& locks);
     bool nodeIsSafeForOperation(persistent_ptr<PmseTreeNode> node, bool insert);
     uint64_t cut(uint64_t length);
     int64_t getNeighborIndex(persistent_ptr<PmseTreeNode> node);
@@ -133,12 +133,12 @@ class PmseTree {
                              const BSONObj& _ordering);
     persistent_ptr<PmseTreeNode> locateLeafWithKeyPM(
                     persistent_ptr<PmseTreeNode> node, IndexKeyEntry& entry,
-                    const BSONObj& _ordering, std::list<nvml::obj::shared_mutex *>& locks,
+                    const BSONObj& _ordering, std::list<nvml::obj::shared_mutex*>& locks,
                     persistent_ptr<PmseTreeNode>& lockNode, bool insert);
     persistent_ptr<PmseTreeNode> splitFullNodeAndInsert(
                     pool_base pop, persistent_ptr<PmseTreeNode> node,
                     IndexKeyEntry& entry, const BSONObj& _ordering,
-                    std::list<nvml::obj::shared_mutex *>& locks);
+                    std::list<nvml::obj::shared_mutex*>& locks);
     persistent_ptr<PmseTreeNode> insertIntoNodeParent(
                     pool_base pop, persistent_ptr<PmseTreeNode> root,
                     persistent_ptr<PmseTreeNode> node, IndexKeyEntry_PM& new_key,
