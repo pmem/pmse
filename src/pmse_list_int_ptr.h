@@ -90,6 +90,7 @@ class PmseListIntPtr {
     void setPool();
     uint64_t size();
     uint64_t getNextId();
+    uint64_t getDataSize();
 
  private:
     persistent_ptr<KVPair> getHead() {
@@ -99,6 +100,7 @@ class PmseListIntPtr {
     persistent_ptr<KVPair> _tail;
     persistent_ptr<KVPair> _deleted;
     p<uint64_t> _counter;
+    p<uint64_t> _dataSize;
     p<uint64_t> _size;
     pool_base _pop;
 };
