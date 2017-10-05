@@ -252,7 +252,7 @@ bool PmseCursor::atEndPoint() {
 boost::optional<IndexKeyEntry> PmseCursor::next(
                 RequestedInfo parts = kKeyAndLoc) {
     std::list<LocksPtr> locks;
-    if(_tree->_root==nullptr)
+    if (_tree->_root == nullptr)
         return {};
     if (_wasRestore) {
         locate(_cursorKey, RecordId(_cursorId), locks);
