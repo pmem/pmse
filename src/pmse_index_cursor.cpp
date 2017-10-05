@@ -252,13 +252,14 @@ bool PmseCursor::atEndPoint() {
 boost::optional<IndexKeyEntry> PmseCursor::next(
                 RequestedInfo parts = kKeyAndLoc) {
     std::list<LocksPtr> locks;
-    if(_tree->_root==nullptr)
+    if (_tree->_root == nullptr)
         return {};
     if (_wasRestore) {
         locate(_cursorKey, RecordId(_cursorId), locks);
         IndexEntryComparison c(Ordering::make(_ordering));
         if ( c.compare(IndexKeyEntry(_cursorKey, RecordId(_cursorId)),
-                        IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(), RecordId((_cursor.node->keys[_cursor.index]).loc))) == 0)
+                        IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),
+                                        RecordId((_cursor.node->keys[_cursor.index]).loc))) == 0)
             moveToNext();
         _wasRestore = false;
     } else {
