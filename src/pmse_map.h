@@ -203,8 +203,11 @@ class PmseMap {
                 initialize(true);
             });
             _counter = 0;
-            _hashmapSize = {0};
+            _hashmapSize = 0;
             _dataSize = 0;
+            _pmCounter = 0;
+            _pmDataSize = 0;
+            _pmHashmapSize = 0;
         } catch (nvml::transaction_alloc_error &e) {
             std::cout << e.what() << std::endl;
             status = false;
@@ -255,9 +258,12 @@ class PmseMap {
     void recover() {
         uint64_t countedSize = 0;
         uint64_t deletedSize = 0;
+        uint64_t recoveredDataSize = 0;
         for(int i = 0; i < _size; i++) {
             countedSize += _list[i]->size();
+            recoveredDataSize += _list[i]->getDataSize();
         }
+        _dataSize = recoveredDataSize;
         _hashmapSize = countedSize;
         auto cur = _deleted;
         while(cur) {
@@ -271,11 +277,13 @@ class PmseMap {
     void restoreCounters() {
         _hashmapSize = _pmHashmapSize;
         _counter = _pmCounter;
+        _dataSize = _pmDataSize;
     }
 
     void storeCounters() {
         _pmHashmapSize = _hashmapSize.load();
         _pmCounter = _counter.load();
+        _pmDataSize = _dataSize.load();
     }
 
     nvml::obj::mutex _listMutex[HASHMAP_SIZE];
@@ -284,10 +292,11 @@ class PmseMap {
     const int _size;
     const bool _isCapped;
     pool_base pop;
-    p<uint64_t> _dataSize = 0;
+    std::atomic<uint64_t> _dataSize = {0};
     std::atomic<uint64_t> _counter = {1};
     std::atomic<uint64_t> _hashmapSize = {0};
     p<uint64_t> _pmCounter;
+    p<uint64_t> _pmDataSize;
     p<uint64_t> _pmHashmapSize;
     p<uint64_t> _maxDocuments;
     p<uint64_t> _sizeOfCollection;

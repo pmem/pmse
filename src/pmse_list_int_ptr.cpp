@@ -87,6 +87,7 @@ void PmseListIntPtr::insertKV(const persistent_ptr<KVPair> &key,
             }
             _size++;
         }
+        _dataSize += value->size;
 }
 
 int64_t PmseListIntPtr::deleteKV(uint64_t key,
@@ -124,6 +125,7 @@ int64_t PmseListIntPtr::deleteKV(uint64_t key,
                     auto rd = RecordData(deleted->ptr->data, deleted->ptr->size);
                     txn->recoveryUnit()->registerChange(new RemoveChange(_pop, (deleted->ptr).get(), rd.size()));
                 }
+                _dataSize -= deleted->ptr->size;
                 sizeFreed = pmemobj_alloc_usable_size(deleted->ptr.raw());
                 delete_persistent<InitData>(deleted->ptr);
             });
@@ -207,6 +209,10 @@ void PmseListIntPtr::clear(OperationContext* txn, PmseMap<InitData> *_mapper) {
 
 uint64_t PmseListIntPtr::getNextId() {
     return _counter++;
+}
+
+uint64_t PmseListIntPtr::getDataSize() {
+    return _dataSize;
 }
 
 }  // namespace mongo
