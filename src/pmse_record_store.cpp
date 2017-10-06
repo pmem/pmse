@@ -97,6 +97,7 @@ PmseRecordStore::PmseRecordStore(StringData ns,
         pool_handler->insert(std::pair<std::string, pool_base>(ident.toString(),
                                                                _mapPool));
     }
+
     auto mapper_root = _mapPool.get_root();
 
     if (!mapper_root->kvmap_root_ptr) {
@@ -106,21 +107,22 @@ PmseRecordStore::PmseRecordStore(StringData ns,
                                                                              options.cappedSize,
                                                                              isSystemCollection(ns));
         });
-        mapper_root->kvmap_root_ptr->initialize(true);
+        _mapper = mapper_root->kvmap_root_ptr;
+        _mapper->initialize(true);
     } else {
-        transaction::exec_tx(_mapPool, [mapper_root, recoveryNeeded] {
-            mapper_root->kvmap_root_ptr->initialize(false);
+        _mapper = mapper_root->kvmap_root_ptr;
+        if (_mapper->isInitialized()) {
+            _mapper->initialize(false);
+        } else {
+            _mapper->initialize(true);
+        }
+        transaction::exec_tx(_mapPool, [this, recoveryNeeded] {
             if (recoveryNeeded) {
-                mapper_root->kvmap_root_ptr->recover();
+                _mapper->recover();
             } else {
-                mapper_root->kvmap_root_ptr->restoreCounters();
+                _mapper->restoreCounters();
             }
         });
-    }
-    try {
-        _mapper = _mapPool.get_root()->kvmap_root_ptr;
-    } catch (std::exception& e) {
-        log() << "Error while creating PmseRecordStore";
     }
 }
 

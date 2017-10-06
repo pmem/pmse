@@ -66,10 +66,10 @@ class PmseMap {
     friend PmseRecordCursor;
 
  public:
-    PmseMap() = default;
+    PmseMap() = delete;
 
     PmseMap(bool isCapped, uint64_t maxDoc, uint64_t sizeOfColl, bool decreaseSize = false, uint64_t size = HASHMAP_SIZE)
-        : _size(isCapped ? CAPPED_SIZE : (decreaseSize ? size/100 : size)), _isCapped(isCapped) {
+        : _size(isCapped ? CAPPED_SIZE : (decreaseSize ? size/100 : size)), _isCapped(isCapped), _toInitialize(0) {
         _maxDocuments = maxDoc;
         _sizeOfCollection = sizeOfColl;
         try {
@@ -79,7 +79,10 @@ class PmseMap {
         }
     }
 
-    ~PmseMap() = default;
+    ~PmseMap() {
+        std::cout << "~PmseMap()" << std::endl;
+        deinitialize();
+    }
 
     uint64_t insert(persistent_ptr<T> value) {
         auto id = getNextId();
@@ -163,11 +166,12 @@ class PmseMap {
 
     void initialize(bool firstRun) {
         pop = pool_by_vptr(this);
-        for (int i = 0; i < _size; i++) {
+        for (int i = _toInitialize; i < _size; i++) {
             if (firstRun) {
                 try {
                     transaction::exec_tx(pop, [this, i] {
                         _list[i] = make_persistent<PmseListIntPtr>();
+                        _toInitialize = i;
                     });
                 } catch(std::exception &e) {
                     std::cout << e.what() << std::endl;
@@ -175,9 +179,11 @@ class PmseMap {
             }
             _list[i]->setPool();
         }
+        _initialized = true;
     }
 
     void deinitialize() {
+        _initialized = false;
         for (int i = 0; i < _size; i++) {
             delete_persistent<PmseListIntPtr>(_list[i]);
         }
@@ -285,13 +291,16 @@ class PmseMap {
         _pmCounter = _counter.load();
         _pmDataSize = _dataSize.load();
     }
-
+    bool isInitialized() {
+        return _initialized;
+    }
     nvml::obj::mutex _listMutex[HASHMAP_SIZE];
 
  private:
     const int _size;
     const bool _isCapped;
     pool_base pop;
+    p<bool> _initialized = false;
     std::atomic<uint64_t> _dataSize = {0};
     std::atomic<uint64_t> _counter = {1};
     std::atomic<uint64_t> _hashmapSize = {0};
@@ -300,6 +309,7 @@ class PmseMap {
     p<uint64_t> _pmHashmapSize;
     p<uint64_t> _maxDocuments;
     p<uint64_t> _sizeOfCollection;
+    p<uint64_t> _toInitialize;
     persistent_ptr<persistent_ptr<PmseListIntPtr>[]> _list;
 
     nvml::obj::mutex _pmutex;
