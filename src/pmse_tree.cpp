@@ -507,21 +507,18 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
     if (current == nullptr)
             return nullptr;
 
-    if (current->is_leaf){
+    if (current->is_leaf) {
         (current->_pmutex).lock();
-        if (current != _root)
-        {
+        if (current != _root) {
             (current->_pmutex).unlock();
             current = _root;
-        }
-        else{
+        } else {
             locks.push_back(&(_root->_pmutex));
             return _root;
         }
     }
     (current->_pmutex).lock_shared();
-    if (current != _root)
-    {
+    if (current != _root) {
         (current->_pmutex).unlock_shared();
         (_root->_pmutex).lock_shared();
         current = _root;
@@ -536,18 +533,18 @@ persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
                 break;
             }
         }
-    if (current->children_array[i]->is_leaf){
+    if (current->children_array[i]->is_leaf) {
         (current->children_array[i]->_pmutex).lock();
         locks.push_back(&(current->children_array[i]->_pmutex));
     }
-    else{
+    else {
         (current->children_array[i]->_pmutex).lock_shared();
     }
 
     current = current->children_array[i];
     current->parent->_pmutex.unlock_shared();
     }
-    if (!nodeIsSafeForOperation(current, insert)){
+    if (!nodeIsSafeForOperation(current, insert)) {
         unlockTree(locks);
         current = _root;
         (current->_pmutex).lock();
