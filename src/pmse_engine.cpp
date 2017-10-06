@@ -93,8 +93,8 @@ Status PmseEngine::createRecordStore(OperationContext* opCtx, StringData ns, Str
     stdx::lock_guard<stdx::mutex> lock(_pmutex);
     auto status = Status::OK();
     try {
-        auto record_store = stdx::make_unique<PmseRecordStore>(ns, ident, options, _dbPath, &_poolHandler);
         _identList->insertKV(ident.toString().c_str(), ns.toString().c_str());
+        auto record_store = stdx::make_unique<PmseRecordStore>(ns, ident, options, _dbPath, &_poolHandler);
     } catch(std::exception &e) {
         status = Status(ErrorCodes::OutOfDiskSpace, e.what());
     }
@@ -115,8 +115,8 @@ Status PmseEngine::createSortedDataInterface(OperationContext* opCtx,
                                              const IndexDescriptor* desc) {
     stdx::lock_guard<stdx::mutex> lock(_pmutex);
     try {
-        auto sorted_data_interface = PmseSortedDataInterface(ident, desc, _dbPath, &_poolHandler);
         _identList->insertKV(ident.toString().c_str(), "");
+        auto sorted_data_interface = PmseSortedDataInterface(ident, desc, _dbPath, &_poolHandler);
     } catch (std::exception &e) {
         return Status(ErrorCodes::OutOfDiskSpace, e.what());
     }
