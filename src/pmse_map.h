@@ -66,7 +66,7 @@ class PmseMap {
     friend PmseRecordCursor;
 
  public:
-    PmseMap() = default;
+    PmseMap() = delete;
 
     PmseMap(bool isCapped, uint64_t maxDoc, uint64_t sizeOfColl, bool decreaseSize = false, uint64_t size = HASHMAP_SIZE)
         : _size(isCapped ? CAPPED_SIZE : (decreaseSize ? size/100 : size)), _isCapped(isCapped) {
@@ -79,7 +79,10 @@ class PmseMap {
         }
     }
 
-    ~PmseMap() = default;
+    ~PmseMap() {
+        std::cout << "~PmseMap()" << std::endl;
+        deinitialize();
+    }
 
     uint64_t insert(persistent_ptr<T> value) {
         auto id = getNextId();
@@ -163,21 +166,23 @@ class PmseMap {
 
     void initialize(bool firstRun) {
         pop = pool_by_vptr(this);
-        for (int i = 0; i < _size; i++) {
-            if (firstRun) {
-                try {
-                    transaction::exec_tx(pop, [this, i] {
+        transaction::exec_tx(pop, [this, firstRun] {
+            for (int i = 0; i < _size; i++) {
+                if (firstRun) {
+                    try {
                         _list[i] = make_persistent<PmseListIntPtr>();
-                    });
-                } catch(std::exception &e) {
-                    std::cout << e.what() << std::endl;
+                    } catch(std::exception &e) {
+                        std::cout << e.what() << std::endl;
+                    }
                 }
+                _list[i]->setPool();
             }
-            _list[i]->setPool();
-        }
+        });
+        _initialized = true;
     }
 
     void deinitialize() {
+        _initialized = false;
         for (int i = 0; i < _size; i++) {
             delete_persistent<PmseListIntPtr>(_list[i]);
         }
@@ -285,13 +290,16 @@ class PmseMap {
         _pmCounter = _counter.load();
         _pmDataSize = _dataSize.load();
     }
-
+    bool isInitialized() {
+        return _initialized;
+    }
     nvml::obj::mutex _listMutex[HASHMAP_SIZE];
 
  private:
     const int _size;
     const bool _isCapped;
     pool_base pop;
+    p<bool> _initialized = false;
     std::atomic<uint64_t> _dataSize = {0};
     std::atomic<uint64_t> _counter = {1};
     std::atomic<uint64_t> _hashmapSize = {0};
