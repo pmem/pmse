@@ -204,6 +204,7 @@ persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
             n->keys[0] = k_prime;
             n->parent->keys[k_prime_index].data =
                             neighbor->keys[neighbor->num_keys - 1].data;
+            n->parent->keys[k_prime_index].loc = neighbor->keys[neighbor->num_keys - 1].loc;
         } else {
             n->keys[0] = neighbor->keys[neighbor->num_keys - 1];
 
