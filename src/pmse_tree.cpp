@@ -207,21 +207,16 @@ persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
             n->parent->keys[k_prime_index].loc = neighbor->keys[neighbor->num_keys - 1].loc;
         } else {
             n->keys[0] = neighbor->keys[neighbor->num_keys - 1];
-
-            IndexKeyEntry_PM entryPM;
             persistent_ptr<char> obj;
                 obj = pmemobj_tx_alloc(n->keys[0].getBSON().objsize(), 1);
                 memcpy(static_cast<void*>(obj.get()),
                        n->keys[0].getBSON().objdata(),
                        n->keys[0].getBSON().objsize());
-
-            entryPM = (n->parent->keys[k_prime_index]);
-            if (entryPM.data.raw().off != 0) {
-                pmemobj_tx_free(entryPM.data.raw());
+            if (n->parent->keys[k_prime_index].data.raw().off != 0) {
+                pmemobj_tx_free(n->parent->keys[k_prime_index].data.raw());
             }
-            entryPM.data = obj;
-            n->parent->keys[k_prime_index].data = entryPM.data;
-            n->parent->keys[k_prime_index].loc = entryPM.loc;
+            n->parent->keys[k_prime_index].data = obj;
+            n->parent->keys[k_prime_index].loc = n->keys[0].loc;
         }
     } else {
         /*
@@ -232,30 +227,23 @@ persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
          */
         if (n->is_leaf) {
             n->keys[n->num_keys] = neighbor->keys[0];
-            IndexKeyEntry_PM entryPM;
             persistent_ptr<char> obj;
             obj = pmemobj_tx_alloc(neighbor->keys[1].getBSON().objsize(), 1);
             memcpy(static_cast<void*>(obj.get()),
                    neighbor->keys[1].getBSON().objdata(),
                    neighbor->keys[1].getBSON().objsize());
 
-            entryPM = (n->parent->keys[k_prime_index]);
-            if (entryPM.data.raw().off != 0) {
-                pmemobj_tx_free(entryPM.data.raw());
+            if (n->parent->keys[k_prime_index].data.raw().off != 0) {
+                pmemobj_tx_free(n->parent->keys[k_prime_index].data.raw());
             }
 
-            entryPM.data = obj;
-
-            n->parent->keys[k_prime_index].data = entryPM.data;
-            n->parent->keys[k_prime_index].loc = entryPM.loc;
+            n->parent->keys[k_prime_index].data = obj;
+            n->parent->keys[k_prime_index].loc = neighbor->keys[1].loc;
         } else {
             n->keys[n->num_keys] = k_prime;
             n->children_array[n->num_keys + 1] = neighbor->children_array[0];
             tmp = n->children_array[n->num_keys + 1];
             tmp->parent = n;
-
-            IndexKeyEntry_PM entryPM;
-            entryPM = (n->parent->keys[k_prime_index]);
 
             n->parent->keys[k_prime_index].data = neighbor->keys[0].data;
             n->parent->keys[k_prime_index].loc = neighbor->keys[0].loc;
