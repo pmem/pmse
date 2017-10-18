@@ -42,12 +42,6 @@
 
 namespace mongo {
 
-enum BehaviorIfFieldIsEqual {
-    normal = '\0',
-    less = 'l',
-    greater = 'g',
-};
-
 PmseCursor::PmseCursor(OperationContext* txn, bool isForward,
                        persistent_ptr<PmseTree> tree, const BSONObj& ordering,
                        const bool unique)
@@ -170,7 +164,7 @@ void PmseCursor::locate(const BSONObj& key, const RecordId& loc, std::list<nvml:
                     }
                 }
             if (cmp) {
-                moveToNext();
+                moveToNext(locks);
             }
         }
     }
@@ -257,17 +251,12 @@ boost::optional<IndexKeyEntry> PmseCursor::next(
 
     if (_tree->_root == nullptr)
         return {};
-    if (_wasRestore) {
-        locate(_cursorKey, RecordId(_cursorId), locks);
-        IndexEntryComparison c(Ordering::make(_ordering));
-        if ( c.compare(IndexKeyEntry(_cursorKey, RecordId(_cursorId)),
-                        IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),
-                                        RecordId((_cursor.node->keys[_cursor.index]).loc))) == 0)
-            moveToNext();
-        _wasRestore = false;
-    } else {
-        moveToNext();
-    }
+    locate(_cursorKey, RecordId(_cursorId), locks);
+    IndexEntryComparison c(Ordering::make(_ordering));
+    if ( c.compare(IndexKeyEntry(_cursorKey, RecordId(_cursorId)),
+                    IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),
+                                    RecordId((_cursor.node->keys[_cursor.index]).loc))) == 0)
+        moveToNext(locks);
     if (!_cursor.node) {
         unlockTree(locks);
         return boost::none;
@@ -285,12 +274,13 @@ boost::optional<IndexKeyEntry> PmseCursor::next(
         } else {
             _eofRestore = true;
         }
+    IndexKeyEntry entry((_cursor.node->keys[_cursor.index]).getBSON(),
+                            RecordId((_cursor.node->keys[_cursor.index]).loc));
     unlockTree(locks);
-    return IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),
-                    RecordId((_cursor.node->keys[_cursor.index]).loc));
+    return entry;
 }
 
-void PmseCursor::moveToNext() {
+void PmseCursor::moveToNext(std::list<nvml::obj::shared_mutex*>& locks) {
     if (_forward) {
         /*
          * There are next keys - increment index
@@ -302,6 +292,8 @@ void PmseCursor::moveToNext() {
              * Move to next node - if it exist
              */
             if (_cursor.node->next != nullptr) {
+                _cursor.node->next->_pmutex.lock_shared();
+                locks.push_back(&(_cursor.node->next->_pmutex));
                 _cursor.node = _cursor.node->next;
                 _cursor.index = 0;
             } else {
@@ -319,6 +311,8 @@ void PmseCursor::moveToNext() {
              * Move to prev node - if it exist
              */
             if (_cursor.node->previous != nullptr) {
+                _cursor.node->previous->_pmutex.lock_shared();
+                locks.push_back(&(_cursor.node->previous->_pmutex));
                 _cursor.node = _cursor.node->previous;
                 _cursor.index = _cursor.node->num_keys - 1;
             } else {
@@ -369,9 +363,10 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const BSONObj& key,
     } else {
         _eofRestore = true;
     }
+    IndexKeyEntry entry((_cursor.node->keys[_cursor.index]).getBSON(),
+                            RecordId((_cursor.node->keys[_cursor.index]).loc));
     unlockTree(locks);
-    return IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),
-                    RecordId((_cursor.node->keys[_cursor.index]).loc));
+    return entry;
 }
 
 boost::optional<IndexKeyEntry> PmseCursor::seek(const IndexSeekPoint& seekPoint,
@@ -396,10 +391,10 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const IndexSeekPoint& seekPoint,
     } else {
         _eofRestore = true;
     }
-
+    IndexKeyEntry entry((_cursor.node->keys[_cursor.index]).getBSON(),
+                            RecordId((_cursor.node->keys[_cursor.index]).loc));
     unlockTree(locks);
-    return IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),
-                    RecordId((_cursor.node->keys[_cursor.index]).loc));
+    return entry;
 }
 
 boost::optional<IndexKeyEntry> PmseCursor::seekExact(
@@ -417,7 +412,6 @@ void PmseCursor::saveUnpositioned() {}
 void PmseCursor::restore() {
     if (_eofRestore)
         return;
-    _wasRestore = true;
 }
 
 void PmseCursor::detachFromOperationContext() {}
