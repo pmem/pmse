@@ -99,7 +99,7 @@ class PmseCursor final : public SortedDataInterface::Cursor {
     void unlockTree(std::list<nvml::obj::shared_mutex*>& locks);
     void seekEndCursor();
     bool lower_bound(IndexKeyEntry entry, CursorObject& cursor, std::list<nvml::obj::shared_mutex*>& locks);
-    void moveToNext();
+    void moveToNext(std::list<nvml::obj::shared_mutex*>& locks);
     bool atOrPastEndPointAfterSeeking();
     bool atEndPoint();
     const bool _forward;
@@ -124,7 +124,6 @@ class PmseCursor final : public SortedDataInterface::Cursor {
     bool _endPositionIsDataEnd;
     bool _locateFoundDataEnd;
     bool _eofRestore;
-    bool _wasRestore = false;
 };
 }  // namespace mongo
 
