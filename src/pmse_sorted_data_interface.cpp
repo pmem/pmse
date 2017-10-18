@@ -61,6 +61,11 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
             _pm_pool = pool<PmseTree>((*pool_handler)[ident.toString()]);
         } else {
             std::string filepath = _dbpath.toString() + ident.toString();
+            if (desc->parentNS() == "local.startup_log" &&
+                boost::filesystem::exists(filepath)) {
+                log() << "Delete old startup log";
+                boost::filesystem::remove_all(filepath);
+            }
             if (!boost::filesystem::exists(filepath)) {
                 _pm_pool = pool<PmseTree>::create(filepath.c_str(), "pmse_index",
                                                   (isSystemCollection(desc->parentNS()) ? 10 : 30)
