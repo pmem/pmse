@@ -212,7 +212,7 @@ persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
                 memcpy(static_cast<void*>(obj.get()),
                        n->keys[0].getBSON().objdata(),
                        n->keys[0].getBSON().objsize());
-            if (n->parent->keys[k_prime_index].data.raw().off != 0) {
+            if (n->parent->keys[k_prime_index].data) {
                 pmemobj_tx_free(n->parent->keys[k_prime_index].data.raw());
             }
             n->parent->keys[k_prime_index].data = obj;
@@ -233,7 +233,7 @@ persistent_ptr<PmseTreeNode> PmseTree::redistributeNodes(
                    neighbor->keys[1].getBSON().objdata(),
                    neighbor->keys[1].getBSON().objsize());
 
-            if (n->parent->keys[k_prime_index].data.raw().off != 0) {
+            if (n->parent->keys[k_prime_index].data) {
                 pmemobj_tx_free(n->parent->keys[k_prime_index].data.raw());
             }
 
@@ -774,7 +774,7 @@ persistent_ptr<PmseTreeNode> PmseTree::insertToNodeAfterSplit(
     new_root = insertIntoNodeParent(pop, root, old_node, k_prime, new_node);
 
     IndexKeyEntry_PM entryPM = temp_keys_array[split-1];;
-    if (entryPM.data.raw().off != 0)
+    if (entryPM.data)
        pmemobj_tx_free(entryPM.data.raw());
 
     return new_root;
