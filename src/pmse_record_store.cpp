@@ -339,17 +339,15 @@ Status PmseRecordStore::validate(OperationContext* txn,
         auto dataSize = record->data.size();
         totalDataSize += dataSize;
         ++nRecords;
-        if (level == kValidateFull) {
-            size_t validatedSize;
-            status = adaptor->validate(record->id, record->data, &validatedSize);
-            if (!status.isOK() || static_cast<size_t>(dataSize) != validatedSize) {
-                if (results->valid) {
-                    results->errors.push_back("detected one or more invalid documents (see logs)");
-                    results->valid = false;
-                }
-                ++nInvalid;
-                log() << "document: RecordId(" << record->id << ") is corruped";
+        size_t validatedSize;
+        status = adaptor->validate(record->id, record->data, &validatedSize);
+        if (!status.isOK() || static_cast<size_t>(dataSize) != validatedSize) {
+            if (results->valid) {
+                results->errors.push_back("detected one or more invalid documents (see logs)");
+                results->valid = false;
             }
+            ++nInvalid;
+            log() << "document: RecordId(" << record->id << ") is corruped";
         }
     }
 
