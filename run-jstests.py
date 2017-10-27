@@ -34,47 +34,87 @@
 from argparse import ArgumentParser
 from os import listdir, linesep
 from os.path import isfile, join
-from subprocess import run, check_output
+from subprocess import run, TimeoutExpired, STDOUT, PIPE, DEVNULL
+from time import perf_counter
+from collections import OrderedDict
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     parser = ArgumentParser(
-        description="Run jstests/core tests with resmoke.py")
-    parser.add_argument("-m", "--mongo-root", required=True,
-                        help="Path to mongo source root directory.abs")
-    parser.add_argument("-d", "--dbpath", required=True,
-                        help="Directory where database is created.")
-    parser.add_argument("--use-core-arg", action='store_true',
-                        help="--suites=core argument is used.")
-    parser.add_argument("--timeout", type=int, default=5 *
-                        60, help="Test case timeout in seconds.")
-
+        description='Run jstests/core tests with resmoke.py')
+    parser.add_argument('-m', '--mongo-root', required=True,
+                        help='Path to mongo source root directory.abs')
+    parser.add_argument('-d', '--dbpath', required=True,
+                        help='Directory where database is created.')
+    parser.add_argument('-s', '--suite', required=True, help='Suite to run.')
+    parser.add_argument('--timeout', type=int, default=5 *
+                        60, help='Test case timeout in seconds.')
+    parser.add_argument('-t', '--tests', nargs='+',
+                        help='Tests from selected suite to run, default: run all.')
     args = parser.parse_args()
 
-    test_dir = '{}/jstests/core'.format(args.mongo_root)
-    db_dir = args.dbpath
+    test_dir = join(args.mongo_root, 'jstests', args.suite)
+    if args.tests:
+        tests = args.tests
+    else:
+        tests = [test for test in listdir(test_dir) if isfile(
+            join(test_dir, test)) and test.endswith('js')]
 
-    tests = [test for test in listdir(test_dir) if isfile(
-        join(test_dir, test)) and test.endswith('js')]
-
-    test_binary = ['{}/buildscripts/resmoke.py'.format(args.mongo_root)]
-    test_args = ['--continueOnFailure',
-                 '--storageEngine=pmse', '--dbpath={}'.format(db_dir)]
-    if args.use_core_arg:
-        test_args.append('--suites=core')
+    test_binary = [join(args.mongo_root, 'buildscripts', 'resmoke.py')]
+    test_args = ['--continueOnFailure', '--storageEngine=pmse',
+                 '--suites={}'.format(args.suite), '--dbpath={}'.format(args.dbpath)]
 
     failed = []
+    passed_warnings = OrderedDict()
+    timeout = []
+    out = ''
+
+    margin = len(max(tests, key=len)) + 8
     for test in sorted(tests):
-        print("{0}Running {1}:".format(linesep, test))
         cmd = test_binary + test_args
         cmd.append(join(test_dir, test))
+        print_output = False
+        print('{} ...'.format(test).ljust(margin), end='', flush=True)
 
-        completed_process = run(cmd, cwd=args.mongo_root, timeout=args.timeout)
-        if completed_process.returncode != 0:
-            failed.append(test)
+        start = perf_counter()
+        try:
+            proc = run(cmd, stderr=STDOUT, stdout=PIPE,
+                       cwd=args.mongo_root, timeout=args.timeout)
+        except TimeoutExpired:
+            run('pgrep mongod | xargs kill -9',
+                shell=True, stdout=DEVNULL, stderr=STDOUT)
+            timeout.append(test)
+            print('TIMEOUT', end='')
+        else:
+            out = proc.stdout.decode('utf-8')
+            if proc.returncode == 0:
+                print('PASSED', end='')
+            elif 'were skipped, 0 failed, 0 errored' in out:
+                print('PASSED WITH WARNINGS. Test exited with code {}'.format(
+                    proc.returncode), end='')
+                passed_warnings[test] = proc.exitcode
+                print_output = True
+            else:
+                print('FAILED', end='')
+                failed.append(test)
+                print_output = True
+        finally:
+            elapsed_ms = (perf_counter() - start) * 1000
+            print('\t{0:.3f} [ms]'.format(elapsed_ms))
+            if print_output:
+                print(out)
+            run('rm -r {}/job0'.format(args.dbpath), shell=True)
 
-        run('rm -rf {}/job0'.format(db_dir), shell=True)
+    if not failed and not timeout:
+        print('All tests passed')
+    else:
+        print('{0}Out of {1} tests {2} failed:'.format(
+            linesep, len(tests), len(failed) + len(timeout)))
+        for test in failed:
+            print(test)
+        for test in timeout:
+            print('{} (TIMEOUT)'.format(test))
 
-    print("{0}Out of {1} tests {2} failed:".format(linesep, len(tests), len(failed)))
-    for test in failed:
-        print(test)
+    if passed_warnings:
+        print('{} tests passed but exited with non-zero code:'.format(len(passed_warnings)))
+        for test, returncode in passed_warnings.items():
+            print('{0} ({1})'.format(test, returncode))
