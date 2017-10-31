@@ -105,6 +105,11 @@ std::unique_ptr<RecordStore> PmseEngine::getRecordStore(OperationContext* opCtx,
                                                         StringData ns,
                                                         StringData ident,
                                                         const CollectionOptions& options) {
+    persistent_ptr<PmseMap<InitData>> _mapper;
+    pool<root> mapPoolOld = pool<root>((_poolHandler)[ident.toString()]);
+    auto mapper_root = mapPoolOld.get_root();
+    _mapper = mapper_root->kvmap_root_ptr;
+    _mapper->storeCounters();
     _identList->update(ident.toString().c_str(), ns.toString().c_str());
     return stdx::make_unique<PmseRecordStore>(ns, ident, options, _dbPath,
                                               &_poolHandler, (_needCheck ? true : false));
