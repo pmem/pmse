@@ -48,9 +48,14 @@
 #include "mongo/db/catalog/collection_options.h"
 #include "mongo/util/log.h"
 
+#include <boost/algorithm/string/predicate.hpp>
+
 namespace mongo {
 
 PmseEngine::PmseEngine(std::string dbpath) : _dbPath(dbpath) {
+    if(!boost::algorithm::ends_with(dbpath, "/")) {
+        _dbPath = _dbPath +"/";
+    }
     std::string path = _dbPath+_kIdentFilename.toString();
     if (!boost::filesystem::exists(path)) {
         pop = pool<ListRoot>::create(path, "pmse_identlist", 4 * PMEMOBJ_MIN_POOL,
