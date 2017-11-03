@@ -362,6 +362,8 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const BSONObj& key,
         // remember next value
     } else {
         _eofRestore = true;
+        unlockTree(locks);
+        return {};
     }
     IndexKeyEntry entry((_cursor.node->keys[_cursor.index]).getBSON(),
                         RecordId((_cursor.node->keys[_cursor.index]).loc));
@@ -390,6 +392,8 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const IndexSeekPoint& seekPoint,
         // remember next value
     } else {
         _eofRestore = true;
+        unlockTree(locks);
+        return {};
     }
     IndexKeyEntry entry((_cursor.node->keys[_cursor.index]).getBSON(),
                         RecordId((_cursor.node->keys[_cursor.index]).loc));
