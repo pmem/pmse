@@ -165,6 +165,10 @@ void PmseCursor::locate(const BSONObj& key, const RecordId& loc, std::list<nvml:
                 }
             if (cmp) {
                 moveToNext(locks);
+                if(!_cursor.node) {
+                    _isEOF = true;
+                    return;
+                }
             }
         }
     }
@@ -252,6 +256,10 @@ boost::optional<IndexKeyEntry> PmseCursor::next(
     if (_tree->_root == nullptr)
         return {};
     locate(_cursorKey, RecordId(_cursorId), locks);
+    if (!_cursor.node) {
+            unlockTree(locks);
+            return boost::none;
+    }
     IndexEntryComparison c(Ordering::make(_ordering));
     if ( c.compare(IndexKeyEntry(_cursorKey, RecordId(_cursorId)),
                     IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),
@@ -281,6 +289,7 @@ boost::optional<IndexKeyEntry> PmseCursor::next(
 }
 
 void PmseCursor::moveToNext(std::list<nvml::obj::shared_mutex*>& locks) {
+    persistent_ptr<PmseTreeNode> node;
     if (_forward) {
         /*
          * There are next keys - increment index
@@ -292,8 +301,9 @@ void PmseCursor::moveToNext(std::list<nvml::obj::shared_mutex*>& locks) {
              * Move to next node - if it exist
              */
             if (_cursor.node->next != nullptr) {
-                _cursor.node->next->_pmutex.lock_shared();
-                locks.push_back(&(_cursor.node->next->_pmutex));
+                node = _cursor.node->next;
+                node->_pmutex.lock_shared();
+                locks.push_back(&(node->_pmutex));
                 _cursor.node = _cursor.node->next;
                 _cursor.index = 0;
             } else {
@@ -311,8 +321,9 @@ void PmseCursor::moveToNext(std::list<nvml::obj::shared_mutex*>& locks) {
              * Move to prev node - if it exist
              */
             if (_cursor.node->previous != nullptr) {
-                _cursor.node->previous->_pmutex.lock_shared();
-                locks.push_back(&(_cursor.node->previous->_pmutex));
+                node = _cursor.node->previous;
+                node->_pmutex.lock_shared();
+                locks.push_back(&(node->_pmutex));
                 _cursor.node = _cursor.node->previous;
                 _cursor.index = _cursor.node->num_keys - 1;
             } else {
