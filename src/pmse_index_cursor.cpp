@@ -50,7 +50,6 @@ PmseCursor::PmseCursor(OperationContext* txn, bool isForward,
       _first(tree->_first),
       _last(tree->_last),
       _tree(tree),
-      _endPositionIsDataEnd(false),
       _locateFoundDataEnd(false),
       _eofRestore(false) {}
 
@@ -181,13 +180,14 @@ void PmseCursor::seekEndCursor() {
     std::list<nvml::obj::shared_mutex*> locks;
     found = lower_bound(_endState->query, endCursor, locks);
     if (_locateFoundDataEnd) {
-        _endPositionIsDataEnd = true;
         _locateFoundDataEnd = false;
+        endCursor.node = nullptr;
+        unlockTree(locks);
+        return;
     }
     if (!_forward) {
         // lower_bound lands us on or after query. Reverse cursors must be on or before.
         if ( (endCursor.node == _first) && (endCursor.index == 0) ) {
-            _endPositionIsDataEnd = true;
             unlockTree(locks);
             return;
         }
