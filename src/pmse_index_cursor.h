@@ -121,7 +121,6 @@ class PmseCursor final : public SortedDataInterface::Cursor {
     boost::optional<EndState> _endState;
     BSONObj _cursorKey;
     int64_t _cursorId;
-    bool _endPositionIsDataEnd;
     bool _locateFoundDataEnd;
     bool _eofRestore;
 };
