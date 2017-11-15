@@ -43,3 +43,26 @@ env.Library(
     LIBDEPS_DEPENDENTS=['$BUILD_DIR/mongo/db/serveronly']
 )
 
+env.CppUnitTest(
+        target='pmse_init_test',
+        source=['src/pmse_init_test.cpp',
+                ]
+        )
+		
+env.CppUnitTest(
+        target='pmse_engine_test',
+        source=['src/pmse_engine_test.cpp',
+                ]
+        )
+		
+env.CppUnitTest(
+        target='pmse_record_store_test',
+        source=['src/pmse_record_store_test.cpp',
+                ]
+        )
+		
+env.CppUnitTest(
+        target='pmse_sorted_data_interface_test',
+        source=['src/pmse_sorted_data_interface_test.cpp',
+                ]
+        )
