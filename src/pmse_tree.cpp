@@ -882,7 +882,7 @@ Status PmseTree::insert(pool_base pop, IndexKeyEntry& entry,
             if (cmp == 0) {
                 if (node->keys[i].loc != entry.loc.repr()) {
                     StringBuilder sb;
-                    sb << "Duplicate key error ";
+                    sb << "E11000 duplicate key error ";
                     sb << "dup key: " << entry.key.toString();
                     unlockTree(locks);
                     return Status(ErrorCodes::DuplicateKey, sb.str());
