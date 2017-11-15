@@ -38,6 +38,17 @@ from subprocess import run, TimeoutExpired, STDOUT, PIPE, DEVNULL
 from time import perf_counter
 from collections import OrderedDict
 
+
+def get_tests_for_suite(suite, mongo_root, test_binary):
+    cmd = test_binary + ['--suites={}'.format(suite), '-n']
+    proc = run(cmd, stdout=PIPE, cwd=mongo_root)
+    out = proc.stdout.decode('utf-8').splitlines()
+
+    tests = [join(mongo_root, line) for line in out if line.startswith(
+        'jstests') and line.endswith('.js')]
+
+    return tests
+
 if __name__ == '__main__':
     parser = ArgumentParser(
         description='Run jstests/core tests with resmoke.py')
@@ -48,20 +59,24 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--suite', required=True, help='Suite to run.')
     parser.add_argument('--timeout', type=int, default=5 *
                         60, help='Test case timeout in seconds.')
-    parser.add_argument('-t', '--tests', nargs='+',
-                        help='Tests from selected suite to run, default: run all.')
+    parser.add_argument(
+        '-t',
+        '--tests',
+        nargs='+',
+        help='Tests from selected suite to run, default: run all.')
     args = parser.parse_args()
 
     test_dir = join(args.mongo_root, 'jstests', args.suite)
+    test_binary = [join(args.mongo_root, 'buildscripts', 'resmoke.py')]
+    test_args = ['--continueOnFailure',
+                 '--storageEngine=pmse',
+                 '--suites={}'.format(args.suite),
+                 '--dbpath={}'.format(args.dbpath)]
+
     if args.tests:
         tests = args.tests
     else:
-        tests = [test for test in listdir(test_dir) if isfile(
-            join(test_dir, test)) and test.endswith('js')]
-
-    test_binary = [join(args.mongo_root, 'buildscripts', 'resmoke.py')]
-    test_args = ['--continueOnFailure', '--storageEngine=pmse',
-                 '--suites={}'.format(args.suite), '--dbpath={}'.format(args.dbpath)]
+        tests = get_tests_for_suite(args.suite, args.mongo_root, test_binary)
 
     failed = []
     passed_warnings = OrderedDict()
@@ -73,6 +88,8 @@ if __name__ == '__main__':
         cmd = test_binary + test_args
         cmd.append(join(test_dir, test))
         print_output = False
+        skipped = False
+
         print('{} ...'.format(test).ljust(margin), end='', flush=True)
 
         start = perf_counter()
@@ -87,7 +104,11 @@ if __name__ == '__main__':
         else:
             out = proc.stdout.decode('utf-8')
             if proc.returncode == 0:
-                print('PASSED', end='')
+                if "No tests ran" in out:
+                    print('SKIPPED', end='')
+                    skipped = True
+                else:
+                    print('PASSED', end='')
             elif 'were skipped, 0 failed, 0 errored' in out:
                 print('PASSED WITH WARNINGS. Test exited with code {}'.format(
                     proc.returncode), end='')
@@ -102,7 +123,8 @@ if __name__ == '__main__':
             print('\t{0:.3f} [ms]'.format(elapsed_ms))
             if print_output:
                 print(out)
-            run('rm -r {}/job0'.format(args.dbpath), shell=True)
+            if not skipped:
+                run('rm -r {}/job0'.format(args.dbpath), shell=True)
 
     if not failed and not timeout:
         print('All tests passed')
