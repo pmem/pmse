@@ -402,7 +402,6 @@ bool PmseRecordCursor::restore() {
             _lastMoveWasRestore = true;
     }
     if (_mapper->isCapped()) {
-        _eof = true;
         return !(_isCapped && _lastMoveWasRestore);
     }
     if (_eof)
