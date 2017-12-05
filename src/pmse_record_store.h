@@ -84,12 +84,14 @@ class PmseRecordCursor final : public SeekableRecordCursor {
     persistent_ptr<KVPair> _before;
     persistent_ptr<KVPair> _cur;
     p<bool> _eof = false;
+    p<bool> _needFirstSeek;
     p<bool> _isCapped;
     p<bool> _forward;
     p<bool> _lastMoveWasRestore;
     p<bool> _positionCheck;
     p<int64_t> _actualListNumber = -1;
     p<uint64_t> _position;
+    RecordId _savedId;
 };
 
 class PmseRecordStore : public RecordStore {

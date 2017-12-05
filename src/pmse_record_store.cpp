@@ -260,6 +260,7 @@ PmseRecordCursor::PmseRecordCursor(persistent_ptr<PmseMap<InitData>> mapper, boo
     _mapper = mapper;
     _before = nullptr;
     _cur = nullptr;
+    _needFirstSeek = true;
 }
 
 void PmseRecordCursor::moveToNext(bool inNext) {
@@ -359,15 +360,27 @@ Status PmseRecordStore::validate(OperationContext* txn,
 }
 
 boost::optional<Record> PmseRecordCursor::next() {
-    if (_eof)
-        return boost::none;
-    if (_forward)
-        moveToNext();
-    else
-        moveBackward();
+    if (_needFirstSeek) {
+        if (_forward) {
+            moveToNext();
+        } else {
+            moveBackward();
+        }
+        _needFirstSeek = false;
+    } else {
+        if (_cur->isDeleted == true) {
+            return {};
+        }
+        if (_forward) {
+            moveToNext();
+        } else {
+            moveBackward();
+        }
+    }
+    _lastMoveWasRestore = false;
+
     if (_cur == nullptr || _eof) {
-        _eof = true;
-        return boost::none;
+        return {};
     }
     _position = _cur->position;
     RecordId a((int64_t) _cur->idValue);
@@ -392,25 +405,35 @@ boost::optional<Record> PmseRecordCursor::seekExact(const RecordId& id) {
 }
 
 void PmseRecordCursor::save() {
+    if (!_needFirstSeek && !_lastMoveWasRestore)
+        _savedId = _cur == nullptr ? RecordId() : RecordId(_cur->idValue);
     _positionCheck = true;
 }
 
 bool PmseRecordCursor::restore() {
-    if (_positionCheck) {
-        _positionCheck = false;
-        if (checkPosition() && _cur != nullptr && _cur->isDeleted)
-            _lastMoveWasRestore = true;
-    }
-    if (_mapper->isCapped()) {
-        _eof = true;
-        return false;
-    }
-    if (_eof)
+    if (_savedId.isNull()) {
+        _cur = nullptr;
         return true;
-    return true;
+    }
+    if (_positionCheck) {
+        if (_isCapped) {
+            return (_cur->idValue > _mapper->getCappedFirstId());
+        } else {
+            _positionCheck = false;
+            if (checkPosition() && _cur != nullptr && _cur->isDeleted) {
+                _lastMoveWasRestore = true;
+            }
+        }
+    }
+
+    if (_eof) {
+        return true;
+    }
+    return !(_isCapped && _lastMoveWasRestore);
 }
 
 void PmseRecordCursor::saveUnpositioned() {
+    _savedId = RecordId();
     _eof = true;
 }
 
