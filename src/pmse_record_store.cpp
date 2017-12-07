@@ -244,9 +244,53 @@ Status PmseRecordStore::insertRecordsWithDocWriter(OperationContext* txn,
                                                    const Timestamp* timestamps,
                                                    size_t nDocs,
                                                    RecordId* idsOut) {
-    // TODO(kfilipek): Implement insertRecordsWithDocWriter
-    log() << "Not implemented: insertRecordsWithDocWriter";
-    return Status::OK();
+    std::unique_ptr<Record[]> records(new Record[nDocs]);
+
+    size_t totalSize = 0;
+    for (size_t i = 0; i < nDocs; i++) {
+        const size_t docSize = docs[i]->documentSize();
+        records[i].data = RecordData(nullptr, docSize);
+        totalSize += docSize;
+    }
+
+    std::unique_ptr<char[]> buffer(new char[totalSize]);
+    char *pos = buffer.get();
+    for (size_t i = 0; i < nDocs; i++) {
+        docs[i]->writeDocument(pos);
+        const size_t size = records[i].data.size();
+        records[i].data = RecordData(pos, size);
+        pos += size;
+    }
+    invariant(pos == (buffer.get() + totalSize));
+
+    int64_t totalLength = 0;
+    for (size_t i = 0; i < nDocs; i++)
+        totalLength += records[i].data.size();
+    if (isCapped() && totalLength > static_cast<int>(_mapper->getMax()))
+        return Status(ErrorCodes::BadValue, "object to insert exceeds cappedMaxSize");
+    RecordId highestId = RecordId();
+    dassert(nDocs != 0);
+
+    auto s = Status::OK();
+    for (size_t i = 0; i < nDocs; i++) {
+        auto& record = records[i];
+        auto sRecId = insertRecord(txn, record.data.data(), record.data.size(), timestamps[i], false);
+        if (sRecId.isOK()) {
+            record.id = sRecId.getValue();
+        } else {
+            s = Status(ErrorCodes::BadValue, "object to insert exceeds cappedMaxSize");
+            break;
+        }
+    }
+
+    if (!s.isOK())
+        return s;
+    if (idsOut) {
+        for (size_t i = 0; i < nDocs; i++) {
+            idsOut[i] = records[i].id;
+        }
+    }
+    return s;
 }
 
 void PmseRecordStore::waitForAllEarlierOplogWritesToBeVisible(OperationContext* txn) const {
