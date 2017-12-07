@@ -80,7 +80,7 @@ PmseRecordStore::PmseRecordStore(StringData ns,
         if (!boost::filesystem::exists(mapper_filename.c_str())) {
             try {
                 _mapPool = pool<root>::create(mapper_filename, "pmse_mapper",
-                                              (isSystemCollection(ns) ? 40 : 80)
+                                              (isSystemCollection(ns) ? 600 : 600)
                                               * PMEMOBJ_MIN_POOL, 0664);
             } catch (std::exception &e) {
                 log() << "Error handled: " << e.what();
@@ -426,7 +426,7 @@ void PmseRecordCursor::moveToLast() {
         int64_t lastNonEmpty = -1;
         int64_t scope = (_actualListNumber < 0 ? _mapper->_size : static_cast<int64_t>(_actualListNumber));
         for (int64_t i = 0; i < scope; ++i) {
-            if (_mapper->_list[i]->size())
+            if (_mapper->_list[i].size())
                 lastNonEmpty = i;
         }
         if (lastNonEmpty == -1) {
