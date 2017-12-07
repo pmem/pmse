@@ -71,19 +71,19 @@ void TruncateChange::rollback() {
     _mapper->changeSize(_dataSize);
 }
 
-/*DropListChange::DropListChange(pool_base pop, persistent_ptr<persistent_ptr<PmseListIntPtr>[10'000'000u]> list, int id)
+DropListChange::DropListChange(pool_base pop, persistent_ptr<PmseListIntPtr[]> list, int id)
         : _pop(pop), _list(list), _id(id) {}
 
 void DropListChange::commit() {}
 
 void DropListChange::rollback() {
-    if (_list[_id] == nullptr) {
+   /* if (_list[_id] == nullptr) {
         transaction::exec_tx(_pop, [this] {
             _list[_id] = make_persistent<PmseListIntPtr>();
             _list[_id]->setPool();
         });
-    }
-}*/
+    }*/
+}
 
 InsertChange::InsertChange(persistent_ptr<PmseMap<InitData>> mapper,
                            RecordId loc, uint64_t dataSize)

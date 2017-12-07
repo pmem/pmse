@@ -58,7 +58,7 @@
 namespace mongo {
 
 const uint64_t CAPPED_SIZE = 1;
-const uint64_t HASHMAP_SIZE = 10'000'000u;
+const uint64_t HASHMAP_SIZE = 10000000;
 
 class PmseRecordCursor;
 
@@ -73,6 +73,11 @@ class PmseMap {
         : _size(isCapped ? CAPPED_SIZE : (decreaseSize ? size/100 : size)), _isCapped(isCapped) {
         _maxDocuments = maxDoc;
         _sizeOfCollection = sizeOfColl;
+        //_listMutex = new nvml::obj::mutex[_size];
+        //_listMutex = make_persistent<nvml::obj::mutex[]>(_size);
+        //pop = pool_by_vptr(this);
+        //make_persistent_atomic<nvml::obj::mutex[]>(pop,_listMutex,  size);
+
         /*try {
             _list = make_persistent<PmseListIntPtr[_size]>();
         } catch (std::exception &e) {
@@ -174,8 +179,9 @@ class PmseMap {
                     try {
                         //_list[i] = make_persistent<PmseListIntPtr>();
                         //_list = make_persistent<PmseListIntPtr[HASHMAP_SIZE]>();
-                        make_persistent_atomic<PmseListIntPtr[HASHMAP_SIZE]>(pop, _list);
-
+                        make_persistent_atomic<PmseListIntPtr[]>(pop, _list, _size);
+                        //pop = pool_by_vptr(this);
+                        make_persistent_atomic<nvml::obj::mutex[]>(pop,_listMutex, _size);
                     } catch(std::exception &e) {
                         std::cout << e.what() << std::endl;
                     }
@@ -190,7 +196,7 @@ class PmseMap {
     void deinitialize() {
         _initialized = false;
         for (int i = 0; i < _size; i++) {
-            delete_persistent<PmseListIntPtr[HASHMAP_SIZE]>(_list);
+            delete_persistent<PmseListIntPtr[]>(_list, _size);
         }
     }
 
@@ -203,16 +209,16 @@ class PmseMap {
     bool truncate(OperationContext* txn) {
         bool status = true;
         try {
-            transaction::exec_tx(pop, [this, txn] {
-                for (int i = 0; i < _size; i++) {
-                    _list[i].clear(txn, this);
-                    //if (txn)
-                        //txn->recoveryUnit()->registerChange(new DropListChange(pop, _list, i));
-                    delete_persistent<PmseListIntPtr[HASHMAP_SIZE]>(_list);
-                    //_list[i] = nullptr;
-                }
-                initialize(true);
-            });
+//            transaction::exec_tx(pop, [this, txn] {
+//                for (int i = 0; i < _size; i++) {
+//                    _list[i].clear(txn, this);
+//                    //if (txn)
+//                        //txn->recoveryUnit()->registerChange(new DropListChange(pop, _list, i));
+                    delete_persistent<PmseListIntPtr[]>(_list, _size);
+//                    //_list[i] = nullptr;
+//                }
+//                initialize(true);
+//            });
             _counter = 0;
             _hashmapSize = 0;
             _dataSize = 0;
@@ -299,7 +305,8 @@ class PmseMap {
     bool isInitialized() {
         return _initialized;
     }
-    nvml::obj::mutex _listMutex[HASHMAP_SIZE];
+    //nvml::obj::mutex _listMutex[1000];
+    persistent_ptr<nvml::obj::mutex[]> _listMutex;
 
  private:
     const int _size;
@@ -315,7 +322,7 @@ class PmseMap {
     p<uint64_t> _maxDocuments;
     p<uint64_t> _sizeOfCollection;
     //persistent_ptr<persistent_ptr<PmseListIntPtr>[HASHMAP_SIZE]> _list;
-    persistent_ptr<PmseListIntPtr[HASHMAP_SIZE]> _list;
+    persistent_ptr<PmseListIntPtr[]> _list;
 
     nvml::obj::mutex _pmutex;
     persistent_ptr<KVPair> _deleted;

@@ -80,7 +80,7 @@ PmseRecordStore::PmseRecordStore(StringData ns,
         if (!boost::filesystem::exists(mapper_filename.c_str())) {
             try {
                 _mapPool = pool<root>::create(mapper_filename, "pmse_mapper",
-                                              (isSystemCollection(ns) ? 600 : 600)
+                                              (isSystemCollection(ns) ? 40 : 600)
                                               * PMEMOBJ_MIN_POOL, 0664);
             } catch (std::exception &e) {
                 log() << "Error handled: " << e.what();
