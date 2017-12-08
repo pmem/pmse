@@ -71,18 +71,17 @@ void TruncateChange::rollback() {
     _mapper->changeSize(_dataSize);
 }
 
-DropListChange::DropListChange(pool_base pop, persistent_ptr<PmseListIntPtr[]> list, int id)
-        : _pop(pop), _list(list), _id(id) {}
+DropListChange::DropListChange(pool_base pop, persistent_ptr<PmseListIntPtr[]> list, int _size)
+        : _pop(pop), _list(list), _size(_size) {}
 
 void DropListChange::commit() {}
 
 void DropListChange::rollback() {
-   /* if (_list[_id] == nullptr) {
-        transaction::exec_tx(_pop, [this] {
-            _list[_id] = make_persistent<PmseListIntPtr>();
-            _list[_id]->setPool();
-        });
-    }*/
+    try {
+        make_persistent_atomic<PmseListIntPtr[]>(_pop, _list, _size);
+    } catch(std::exception &e) {
+        std::cout << e.what() << std::endl;
+    }
 }
 
 InsertChange::InsertChange(persistent_ptr<PmseMap<InitData>> mapper,
