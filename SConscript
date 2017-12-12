@@ -56,7 +56,12 @@ env.CppUnitTest(
 env.CppUnitTest(
         target='pmse_record_store_test',
         source=['src/pmse_record_store_test.cpp',
-                ]
+                ],
+        LIBDEPS=[
+            '$BUILD_DIR/mongo/db/storage/kv/kv_engine_core',
+            '$BUILD_DIR/mongo/db/storage/record_store_test_harness',
+            '$BUILD_DIR/mongo/util/clock_source_mock',
+                ],
         )
 env.CppUnitTest(
         target='pmse_sorted_data_interface_test',
