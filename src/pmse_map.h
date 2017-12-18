@@ -47,7 +47,6 @@
 #include <libpmemobj++/pext.hpp>
 #include <libpmemobj++/pool.hpp>
 #include <libpmemobj++/persistent_ptr.hpp>
-#include <libpmemobj++/make_persistent_array.hpp>
 #include <libpmemobj++/mutex.hpp>
 #include <libpmemobj++/detail/pexceptions.hpp>
 #include <libpmemobj++/make_persistent_array_atomic.hpp>
@@ -58,7 +57,7 @@
 namespace mongo {
 
 const uint64_t CAPPED_SIZE = 1;
-const uint64_t HASHMAP_SIZE = 1'000'000u;
+const uint64_t HASHMAP_SIZE = 10'000'000u;
 
 class PmseRecordCursor;
 
@@ -76,7 +75,6 @@ class PmseMap {
     }
 
     ~PmseMap() {
-        std::cout << "~PmseMap()" << std::endl;
         deinitialize();
     }
 
@@ -180,9 +178,8 @@ class PmseMap {
 
     void deinitialize() {
         _initialized = false;
-        for (int i = 0; i < _size; i++) {
-            delete_persistent<PmseListIntPtr[]>(_list, _size);
-        }
+        delete_persistent<PmseListIntPtr[]>(_list, _size);
+        delete_persistent<nvml::obj::mutex[]>(_listMutex, _size);
     }
 
     uint64_t fillment() {
