@@ -150,7 +150,6 @@ class PmseEngine : public KVEngine {
     std::map<std::string, pool_base> _poolHandler;
     std::shared_ptr<void> _catalogInfo;
     std::string _dbPath;
-    PMEMobjpool *pm_pool = NULL;
     const StringData _kIdentFilename = "pmkv.pm";
     pool<ListRoot> pop;
     persistent_ptr<PmseList> _identList;

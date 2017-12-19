@@ -75,7 +75,6 @@ PmseRecordStore::PmseRecordStore(StringData ns,
             log() << "Delete old startup log";
             boost::filesystem::remove_all(filepath);
         }
-
         std::string mapper_filename = _dbPath.toString() + ident.toString();
         if (!boost::filesystem::exists(mapper_filename.c_str())) {
             try {
@@ -97,9 +96,7 @@ PmseRecordStore::PmseRecordStore(StringData ns,
         pool_handler->insert(std::pair<std::string, pool_base>(ident.toString(),
                                                                _mapPool));
     }
-
     auto mapper_root = _mapPool.get_root();
-
     if (!mapper_root->kvmap_root_ptr) {
         transaction::exec_tx(_mapPool, [mapper_root, options, ns] {
             mapper_root->kvmap_root_ptr = make_persistent<PmseMap<InitData>>(options.capped,
