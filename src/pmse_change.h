@@ -63,13 +63,13 @@ class TruncateChange: public RecoveryUnit::Change {
 
 class DropListChange: public RecoveryUnit::Change {
  public:
-    DropListChange(pool_base pop, persistent_ptr<persistent_ptr<PmseListIntPtr>[]> list, int ID);
+    DropListChange(pool_base pop, persistent_ptr<PmseListIntPtr[]> list, int size);
     virtual void rollback();
     virtual void commit();
  private:
     pool_base _pop;
-    persistent_ptr<persistent_ptr<PmseListIntPtr>[]> _list;
-    int _id;
+    persistent_ptr<PmseListIntPtr[]> _list;
+    int _size;
 };
 
 class InsertChange : public RecoveryUnit::Change {
