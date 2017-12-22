@@ -31,21 +31,57 @@
  */
 
 #include "mongo/platform/basic.h"
-#include "mongo/unittest/unittest.h"
+
+#include <libpmemobj.h>
+#include <libpmemobj++/mutex.hpp>
+#include <libpmemobj++/p.hpp>
+#include <libpmemobj++/persistent_ptr.hpp>
+#include <libpmemobj++/pool.hpp>
+#include "mongo/base/init.h"
+#include "mongo/db/modules/pmse/src/pmse_engine.h"
+#include "mongo/db/modules/pmse/src/pmse_record_store.h"
+#include "mongo/db/storage/kv/kv_engine_test_harness.h"
+#include "mongo/stdx/memory.h"
+#include "mongo/unittest/temp_dir.h"
+#include "mongo/util/clock_source_mock.h"
 
 namespace mongo {
+namespace {
 
-class PmseEngineTest : public mongo::unittest::Test {
-private:
-    virtual void setUp() {
+class PmseKVHarnessHelper : public KVHarnessHelper {
+ public:
+  PmseKVHarnessHelper() : _dbpath("psmem_0") {
+    _engine.reset(new PmseEngine(_dbpath.path() + "/"));
+  }
 
-    }
+  virtual ~PmseKVHarnessHelper() {
+    _engine.reset(NULL);
+  }
 
-    virtual void tearDown() {
+  virtual KVEngine* restartEngine() {
+    _engine.reset(NULL);
+    _engine.reset(new PmseEngine(_dbpath.path() + "/"));
+    return _engine.get();
+  }
 
-    }
+  virtual KVEngine* getEngine() {
+    return _engine.get();
+  }
 
-protected:
-
+ private:
+  const std::unique_ptr<ClockSource> _cs = stdx::make_unique<ClockSourceMock>();
+  unittest::TempDir _dbpath;
+  std::unique_ptr<PmseEngine> _engine;
 };
+
+std::unique_ptr<KVHarnessHelper> makeHelper() {
+  return stdx::make_unique<PmseKVHarnessHelper>();
+}
+
+MONGO_INITIALIZER(RegisterKVHarnessFactory)(InitializerContext*) {
+  KVHarnessHelper::registerFactory(makeHelper);
+  return Status::OK();
+}
+
+}  // namespace
 }  // namespace mongo

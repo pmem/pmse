@@ -44,27 +44,84 @@ env.Library(
 )
 
 env.CppUnitTest(
-        target='pmse_init_test',
-        source=['src/pmse_init_test.cpp',
-                ]
-        )
+    target='pmse_init_test',
+    source=['src/pmse_init_test.cpp'],
+	LIBDEPS=['$BUILD_DIR/mongo/db/serveronly']
+)
+
 env.CppUnitTest(
-        target='pmse_engine_test',
-        source=['src/pmse_engine_test.cpp',
-                ]
-        )
+    target= 'pmse_engine_test',
+    source= [
+        'src/pmse_engine_test.cpp'
+    ],
+	LIBDEPS= [
+        '$BUILD_DIR/mongo/db/storage/kv/kv_engine_test_harness',
+        '$BUILD_DIR/mongo/s/client/sharding_client',
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/db/bson/dotted_path_support',
+        '$BUILD_DIR/mongo/db/catalog/collection',
+        '$BUILD_DIR/mongo/db/catalog/collection_options',
+        '$BUILD_DIR/mongo/db/concurrency/lock_manager',
+        '$BUILD_DIR/mongo/db/concurrency/write_conflict_exception',
+        '$BUILD_DIR/mongo/db/index/index_descriptor',
+        '$BUILD_DIR/mongo/db/mongod_options',
+        '$BUILD_DIR/mongo/db/namespace_string',
+        '$BUILD_DIR/mongo/db/repl/repl_settings',
+        '$BUILD_DIR/mongo/db/server_options_core',
+        '$BUILD_DIR/mongo/db/service_context',
+        '$BUILD_DIR/mongo/db/storage/index_entry_comparison',
+        '$BUILD_DIR/mongo/db/storage/journal_listener',
+        '$BUILD_DIR/mongo/db/storage/key_string',
+        '$BUILD_DIR/mongo/db/storage/kv/kv_prefix',
+        '$BUILD_DIR/mongo/db/storage/oplog_hack',
+        '$BUILD_DIR/mongo/db/storage/storage_options',
+        '$BUILD_DIR/mongo/util/concurrency/ticketholder',
+        '$BUILD_DIR/mongo/util/elapsed_tracker',
+        '$BUILD_DIR/mongo/util/processinfo',
+        'storage_pmse_base'
+    ]
+)
+
+env.Library(
+    target= 'additional_pmse_record_store_tests',
+    source= [
+        'src/pmse_record_store_test.cpp',
+    ],
+    LIBDEPS= [
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/db/bson/dotted_path_support',
+        '$BUILD_DIR/mongo/db/catalog/collection',
+        '$BUILD_DIR/mongo/db/catalog/collection_options',
+        '$BUILD_DIR/mongo/db/concurrency/lock_manager',
+        '$BUILD_DIR/mongo/db/concurrency/write_conflict_exception',
+        '$BUILD_DIR/mongo/db/index/index_descriptor',
+        '$BUILD_DIR/mongo/db/mongod_options',
+        '$BUILD_DIR/mongo/db/namespace_string',
+        '$BUILD_DIR/mongo/db/repl/repl_settings',
+        '$BUILD_DIR/mongo/db/server_options_core',
+        '$BUILD_DIR/mongo/db/service_context',
+        '$BUILD_DIR/mongo/db/storage/index_entry_comparison',
+        '$BUILD_DIR/mongo/db/storage/journal_listener',
+        '$BUILD_DIR/mongo/db/storage/key_string',
+        '$BUILD_DIR/mongo/db/storage/kv/kv_prefix',
+        '$BUILD_DIR/mongo/db/storage/oplog_hack',
+        '$BUILD_DIR/mongo/db/storage/storage_options',
+        '$BUILD_DIR/mongo/util/concurrency/ticketholder',
+        '$BUILD_DIR/mongo/util/elapsed_tracker',
+        '$BUILD_DIR/mongo/util/processinfo',
+        'storage_pmse_base',
+        '$BUILD_DIR/mongo/db/storage/kv/kv_engine_core',
+        '$BUILD_DIR/mongo/db/storage/record_store_test_harness',
+        '$BUILD_DIR/mongo/util/clock_source_mock'
+    ]
+)
+
 env.CppUnitTest(
-        target='pmse_record_store_test',
-        source=['src/pmse_record_store_test.cpp',
-                ],
-        LIBDEPS=[
-            '$BUILD_DIR/mongo/db/storage/kv/kv_engine_core',
-            '$BUILD_DIR/mongo/db/storage/record_store_test_harness',
-            '$BUILD_DIR/mongo/util/clock_source_mock',
-                ],
-        )
-env.CppUnitTest(
-        target='pmse_sorted_data_interface_test',
-        source=['src/pmse_sorted_data_interface_test.cpp',
-                ]
-        )
+    target= 'storage_pmse_record_store_test',
+    source= [
+        'src/pmse_standard_record_store_test.cpp'
+    ],
+    LIBDEPS= [
+        'additional_pmse_record_store_tests'
+    ]
+)
