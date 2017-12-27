@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017, Intel Corporation
+ * Copyright 2014-2018, Intel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -59,7 +59,7 @@ namespace mongo {
 
 class JournalListener;
 
-using namespace nvml::obj;
+using namespace pmem::obj;
 
 struct ident_entry {
     persistent_ptr<ident_entry> next;
