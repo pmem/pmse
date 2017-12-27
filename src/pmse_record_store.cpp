@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017, Intel Corporation
+ * Copyright 2014-2018, Intel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -51,7 +51,7 @@
 #include "mongo/db/storage/recovery_unit.h"
 #include "mongo/db/operation_context.h"
 
-using nvml::obj::transaction;
+using pmem::obj::transaction;
 
 namespace mongo {
 
@@ -162,7 +162,7 @@ Status PmseRecordStore::updateRecord(OperationContext* txn, const RecordId& oldL
                                      const char* data, int len, bool enforceQuota,
                                      UpdateNotifier* notifier) {
     persistent_ptr<InitData> obj;
-    stdx::lock_guard<nvml::obj::mutex> lock(_mapper->_listMutex[oldLocation.repr() % _mapper->getHashmapSize()]);
+    stdx::lock_guard<pmem::obj::mutex> lock(_mapper->_listMutex[oldLocation.repr() % _mapper->getHashmapSize()]);
     try {
         transaction::exec_tx(_mapPool, [&obj, len, data, txn, oldLocation, this] {
             obj = pmemobj_tx_alloc(sizeof(InitData::size) + len, 1);
@@ -184,7 +184,7 @@ Status PmseRecordStore::updateRecord(OperationContext* txn, const RecordId& oldL
 
 void PmseRecordStore::deleteRecord(OperationContext* txn,
                                    const RecordId& dl) {
-    stdx::lock_guard<nvml::obj::mutex> lock(_mapper->_listMutex[dl.repr() % _mapper->getHashmapSize()]);
+    stdx::lock_guard<pmem::obj::mutex> lock(_mapper->_listMutex[dl.repr() % _mapper->getHashmapSize()]);
     persistent_ptr<KVPair> p;
     if (_mapper->getPair(dl.repr(), &p)) {
         _mapper->remove((uint64_t) dl.repr(), txn);

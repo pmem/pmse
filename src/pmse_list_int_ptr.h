@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017, Intel Corporation
+ * Copyright 2014-2018, Intel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,13 +30,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/*
- * pmse_list_int_ptr.h
- *
- *  Created on: Sep 22, 2016
- *      Author: kfilipek
- */
-
 #ifndef SRC_PMSE_LIST_INT_PTR_H_
 #define SRC_PMSE_LIST_INT_PTR_H_
 
@@ -52,7 +45,7 @@
 
 #include "mongo/db/operation_context.h"
 
-using namespace nvml::obj;
+using namespace pmem::obj;
 
 namespace mongo {
 struct InitData {

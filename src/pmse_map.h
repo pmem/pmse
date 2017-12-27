@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017, Intel Corporation
+ * Copyright 2014-2018, Intel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,13 +28,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
-/*
- * pmstore_map.h
- *
- *  Created on: Sep 22, 2016
- *      Author: kfilipek
  */
 
 #ifndef SRC_PMSE_MAP_H_
@@ -83,7 +76,7 @@ class PmseMap {
         if (!id) {
             return 0;
         }
-        stdx::lock_guard<nvml::obj::mutex> lock(_listMutex[id->idValue % _size]);
+        stdx::lock_guard<pmem::obj::mutex> lock(_listMutex[id->idValue % _size]);
         if (!insertKV(id, value)) {
             return 0;
         }
@@ -163,7 +156,7 @@ class PmseMap {
         if (firstRun) {
             try {
                 make_persistent_atomic<PmseListIntPtr[]>(pop, _list, _size);
-                make_persistent_atomic<nvml::obj::mutex[]>(pop,_listMutex, _size);
+                make_persistent_atomic<pmem::obj::mutex[]>(pop,_listMutex, _size);
             } catch(std::exception &e) {
                 std::cout << e.what() << std::endl;
             }
@@ -179,7 +172,7 @@ class PmseMap {
     void deinitialize() {
         _initialized = false;
         delete_persistent<PmseListIntPtr[]>(_list, _size);
-        delete_persistent<nvml::obj::mutex[]>(_listMutex, _size);
+        delete_persistent<pmem::obj::mutex[]>(_listMutex, _size);
     }
 
     uint64_t fillment() {
@@ -199,10 +192,10 @@ class PmseMap {
             _pmCounter = 0;
             _pmDataSize = 0;
             _pmHashmapSize = 0;
-        } catch (nvml::transaction_alloc_error &e) {
+        } catch (pmem::transaction_alloc_error &e) {
             std::cout << e.what() << std::endl;
             status = false;
-        } catch (nvml::transaction_scope_error &e) {
+        } catch (pmem::transaction_scope_error &e) {
             std::cout << e.what() << std::endl;
             status = false;
         }
@@ -230,7 +223,7 @@ class PmseMap {
     }
 
     void moveToDeleted(persistent_ptr<KVPair> &item, persistent_ptr<KVPair> &list) {
-        stdx::lock_guard<nvml::obj::mutex> guard(_pmutex);
+        stdx::lock_guard<pmem::obj::mutex> guard(_pmutex);
         if (list != nullptr) {
             item->next = list;
             item->isDeleted = true;
@@ -279,7 +272,7 @@ class PmseMap {
     bool isInitialized() {
         return _initialized;
     }
-    persistent_ptr<nvml::obj::mutex[]> _listMutex;
+    persistent_ptr<pmem::obj::mutex[]> _listMutex;
 
  private:
     const int _size;
@@ -296,7 +289,7 @@ class PmseMap {
     p<uint64_t> _sizeOfCollection;
     persistent_ptr<PmseListIntPtr[]> _list;
 
-    nvml::obj::mutex _pmutex;
+    pmem::obj::mutex _pmutex;
     persistent_ptr<KVPair> _deleted;
 
     persistent_ptr<KVPair> getFirstPtr(int listNumber) {
@@ -320,7 +313,7 @@ class PmseMap {
                 return nullptr;
             }
         } else {
-            stdx::lock_guard<nvml::obj::mutex> guard(_pmutex);
+            stdx::lock_guard<pmem::obj::mutex> guard(_pmutex);
             temp = _deleted;
             _deleted = _deleted->next;
             temp->isDeleted = false;

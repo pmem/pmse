@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017, Intel Corporation
+ * Copyright 2014-2018, Intel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -77,7 +77,7 @@ bool PmseTree::remove(pool_base pop, IndexKeyEntry& entry,
     persistent_ptr<PmseTreeNode> node;
     uint64_t i;
     int64_t cmp;
-    std::list<nvml::obj::shared_mutex*> locks;
+    std::list<pmem::obj::shared_mutex*> locks;
     persistent_ptr<PmseTreeNode> lockNode;
     _ordering = ordering;
     // find node with key
@@ -486,7 +486,7 @@ bool PmseTree::nodeIsSafeForOperation(persistent_ptr<PmseTreeNode> node, bool in
 
 persistent_ptr<PmseTreeNode> PmseTree::locateLeafWithKeyPM(
                 persistent_ptr<PmseTreeNode> node, IndexKeyEntry& entry,
-                const BSONObj& ordering, std::list<nvml::obj::shared_mutex*>& locks,
+                const BSONObj& ordering, std::list<pmem::obj::shared_mutex*>& locks,
                 persistent_ptr<PmseTreeNode>& lockNode, bool insert) {
     uint64_t i = 0;
     int64_t cmp;
@@ -614,7 +614,7 @@ uint64_t PmseTree::cut(uint64_t length) {
 persistent_ptr<PmseTreeNode> PmseTree::splitFullNodeAndInsert(
                 pool_base pop, persistent_ptr<PmseTreeNode> node,
                 IndexKeyEntry& entry, const BSONObj& _ordering,
-                std::list<nvml::obj::shared_mutex*>& locks) {
+                std::list<pmem::obj::shared_mutex*>& locks) {
     persistent_ptr<PmseTreeNode> new_leaf;
     IndexKeyEntry_PM new_entry;
     uint64_t insertion_index = 0;
@@ -836,8 +836,8 @@ persistent_ptr<PmseTreeNode> PmseTree::allocateNewRoot(
     return new_root;
 }
 
-void PmseTree::unlockTree(std::list<nvml::obj::shared_mutex*>& locks) {
-    std::list<nvml::obj::shared_mutex*>::const_iterator iterator;
+void PmseTree::unlockTree(std::list<pmem::obj::shared_mutex*>& locks) {
+    std::list<pmem::obj::shared_mutex*>::const_iterator iterator;
     try {
         for (iterator = locks.begin(); iterator != locks.end(); ++iterator) {
             (*iterator)->unlock();
@@ -852,10 +852,10 @@ Status PmseTree::insert(pool_base pop, IndexKeyEntry& entry,
     Status status = Status::OK();
     uint64_t i;
     int64_t cmp;
-    std::list<nvml::obj::shared_mutex*> locks;
+    std::list<pmem::obj::shared_mutex*> locks;
     persistent_ptr<PmseTreeNode> lockNode;
     if (!_root) {
-        stdx::lock_guard<nvml::obj::mutex> guard(globalMutex);
+        stdx::lock_guard<pmem::obj::mutex> guard(globalMutex);
         if(!_root){
             // root not allocated yet
             try {

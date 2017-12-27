@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017, Intel Corporation
+ * Copyright 2014-2018, Intel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,12 +30,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/*
- * pmstorekvmapper.cpp
- *
- *  Created on: Mar 24, 2016
- *      Author: kfilipek
- */
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
 
 #include "pmse_list.h"
@@ -49,7 +43,7 @@
 namespace mongo {
 
 void PmseList::insertKV(const char key[], const  char value[]) {
-    stdx::lock_guard<nvml::obj::mutex> lock(_pmutex);
+    stdx::lock_guard<pmem::obj::mutex> lock(_pmutex);
     transaction::exec_tx(pool_obj, [this, key, value] {
         persistent_ptr<KVPair> pair;
         try {
@@ -73,7 +67,7 @@ void PmseList::insertKV(const char key[], const  char value[]) {
 }
 
 void PmseList::deleteKV(const char key[]) {
-    stdx::lock_guard<nvml::obj::mutex> lock(_pmutex);
+    stdx::lock_guard<pmem::obj::mutex> lock(_pmutex);
     auto before = head;
     for (auto rec = head; rec != nullptr; rec = rec->next) {
         if (strcmp(rec->kv.get_ro().id, key) == 0) {
@@ -111,7 +105,7 @@ bool PmseList::hasKey(const char key[]) {
 }
 
 std::vector<std::string> PmseList::getKeys() {
-    stdx::lock_guard<nvml::obj::mutex> lock(_pmutex);
+    stdx::lock_guard<pmem::obj::mutex> lock(_pmutex);
     std::vector<std::string> names;
     for (auto rec = head; rec != nullptr; rec = rec->next) {
         names.push_back(rec->kv.get_ro().id);
@@ -120,7 +114,7 @@ std::vector<std::string> PmseList::getKeys() {
 }
 
 const char* PmseList::find(const char key[], bool &status) {
-    stdx::lock_guard<nvml::obj::mutex> lock(_pmutex);
+    stdx::lock_guard<pmem::obj::mutex> lock(_pmutex);
     for (auto rec = head; rec != nullptr; rec = rec->next) {
         if (strcmp(rec->kv.get_ro().id, key) == 0) {
             status = true;
@@ -132,7 +126,7 @@ const char* PmseList::find(const char key[], bool &status) {
 }
 
 void PmseList::update(const char key[], const char value[]) {
-    stdx::lock_guard<nvml::obj::mutex> lock(_pmutex);
+    stdx::lock_guard<pmem::obj::mutex> lock(_pmutex);
     for (auto rec = head; rec != nullptr; rec = rec->next) {
         if (strcmp(rec->kv.get_ro().id, key) == 0) {
             struct _values temp;
@@ -145,7 +139,7 @@ void PmseList::update(const char key[], const char value[]) {
 }
 
 void PmseList::clear() {
-    stdx::lock_guard<nvml::obj::mutex> lock(_pmutex);
+    stdx::lock_guard<pmem::obj::mutex> lock(_pmutex);
     if (!head)
         return;
     transaction::exec_tx(pool_obj, [this] {

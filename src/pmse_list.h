@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017, Intel Corporation
+ * Copyright 2014-2018, Intel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,14 +30,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/*
- * pmstorekvmapper.h
- *
- *  Created on: Mar 24, 2016
- *      Author: kfilipek
- */
-
-
 #ifndef SRC_PMSE_LIST_H_
 #define SRC_PMSE_LIST_H_
 
@@ -52,7 +44,7 @@
 #include <string>
 #include <vector>
 
-using namespace nvml::obj;
+using namespace pmem::obj;
 
 namespace mongo {
 
@@ -89,7 +81,7 @@ class PmseList {
     persistent_ptr<KVPair> head;
     persistent_ptr<KVPair> tail;
     pool<ListRoot> pool_obj;
-    nvml::obj::mutex _pmutex;
+    pmem::obj::mutex _pmutex;
 };
 
 struct ListRoot {
