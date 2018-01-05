@@ -119,6 +119,15 @@ std::vector<std::string> PmseList::getKeys() {
     return names;
 }
 
+std::string PmseList::findFirstValue(const char value[]) {
+    for (auto rec = head; rec != nullptr; rec = rec->next) {
+        if (strcmp(rec->kv.get_ro().value, value) == 0) {
+            return rec->kv.get_ro().id;
+        }
+    }
+    return "";
+}
+
 const char* PmseList::find(const char key[], bool &status) {
     stdx::lock_guard<nvml::obj::mutex> lock(_pmutex);
     for (auto rec = head; rec != nullptr; rec = rec->next) {

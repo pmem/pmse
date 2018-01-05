@@ -224,7 +224,7 @@ class PmseRecordStore : public RecordStore {
     int64_t _storageSize = baseSize;
     CollectionOptions _options;
     const StringData _dbPath;
-    pool<root> _mapPool;
+    pool<Root> _mapPool;
     persistent_ptr<PmseMap<InitData>> _mapper;
 };
 }  // namespace mongo

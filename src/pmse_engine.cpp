@@ -34,6 +34,7 @@
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
 
 #include "pmse_engine.h"
+#include "pmse_map.h"
 #include "pmse_record_store.h"
 #include "pmse_sorted_data_interface.h"
 
@@ -96,6 +97,23 @@ PmseEngine::~PmseEngine() {
 Status PmseEngine::createRecordStore(OperationContext* opCtx, StringData ns, StringData ident,
                                      const CollectionOptions& options) {
     stdx::lock_guard<stdx::mutex> lock(_pmutex);
+    pool<Root> _mapPool;
+    std::string mapper_filename = _dbPath + ident.toString();
+    try {
+        if (!boost::filesystem::exists(mapper_filename.c_str())) {
+            _mapPool = pool<Root>::create(mapper_filename, "pmse_mapper",
+                                          (isSystemCollection(ns) ? 4 : 200)
+                                          * PMEMOBJ_MIN_POOL, 0664);
+        } else {
+            _mapPool = pool<Root>::open(mapper_filename, "pmse_mapper");
+        }
+    } catch (std::exception &e) {
+        log() << "Error handled: " << e.what();
+        throw;
+    }
+    _poolHandler.insert(std::pair<std::string, pool_base>(ident.toString(),
+                        _mapPool));
+
     auto status = Status::OK();
     try {
         _identList->insertKV(ident.toString().c_str(), ns.toString().c_str());
@@ -111,14 +129,22 @@ std::unique_ptr<RecordStore> PmseEngine::getRecordStore(OperationContext* opCtx,
                                                         StringData ident,
                                                         const CollectionOptions& options) {
     persistent_ptr<PmseMap<InitData>> _mapper;
-    pool<root> mapPoolOld;
+    pool<Root> mapPoolOld;
     try {
-        mapPoolOld = pool<root>((_poolHandler).at(ident.toString()));
-    } catch (std::exception &e) {}
-
-    if (mapPoolOld.get_handle()) {
-        _mapper = mapPoolOld.get_root()->kvmap_root_ptr;
-        _mapper->storeCounters();
+        std::map<std::string, pool_base>::iterator it = _poolHandler.find(ident.toString());
+        if (it != _poolHandler.end()) {
+            mapPoolOld = pool<Root>(it->second);
+            _mapper = mapPoolOld.get_root()->kvmap_root_ptr;
+            _mapper->storeCounters();
+        } else {
+            mapPoolOld = pool<Root>::open(_dbPath + ident.toString(), "pmse_mapper");
+            _poolHandler[ident.toString()] = mapPoolOld;
+            _mapper = mapPoolOld.get_root()->kvmap_root_ptr;
+            _mapper->storeCounters();
+        }
+    } catch (std::exception &e) {
+        log() << "Get record store error: " << e.what();
+        throw;
     }
     _identList->update(ident.toString().c_str(), ns.toString().c_str());
     return stdx::make_unique<PmseRecordStore>(ns, ident, options, _dbPath,
@@ -130,8 +156,22 @@ Status PmseEngine::createSortedDataInterface(OperationContext* opCtx,
                                              const IndexDescriptor* desc) {
     stdx::lock_guard<stdx::mutex> lock(_pmutex);
     try {
+        std::string rsIdent = _identList->findFirstValue(desc->parentNS().c_str());
+        pool<Root> rsPool = pool<Root>(_poolHandler.at(rsIdent));
+        persistent_ptr<Root> rsRoot = rsPool.get_root();
+        transaction::exec_tx(rsPool, [&] {
+            auto index = make_persistent<Index>();
+            index->tree = make_persistent<PmseTree>();
+            strcpy(index->identName, ident.toString().c_str());
+            if (rsRoot->index == nullptr) {
+                rsRoot->index = index;
+            } else {
+                index->next = rsRoot->index;
+                rsRoot->index = index;
+            }
+        });
         _identList->insertKV(ident.toString().c_str(), "");
-        auto sorted_data_interface = PmseSortedDataInterface(ident, desc, _dbPath, &_poolHandler);
+        auto sorted_data_interface = PmseSortedDataInterface(ident, desc, _dbPath, rsRoot->index->tree);
     } catch (std::exception &e) {
         return Status(ErrorCodes::OutOfDiskSpace, e.what());
     }
@@ -141,16 +181,29 @@ Status PmseEngine::createSortedDataInterface(OperationContext* opCtx,
 SortedDataInterface* PmseEngine::getSortedDataInterface(OperationContext* opCtx,
                                                         StringData ident,
                                                         const IndexDescriptor* desc) {
-    return new PmseSortedDataInterface(ident, desc, _dbPath, &_poolHandler);
+    std::string rsIdent = _identList->findFirstValue(desc->parentNS().c_str());
+    pool<Root> rsPool = pool<Root>(_poolHandler.at(rsIdent));
+    persistent_ptr<Root> rsRoot = rsPool.get_root();
+    persistent_ptr<Index> indexFound = nullptr;
+    for (auto index = rsRoot->index; index != nullptr; index = index->next) {
+        if (!strcmp(index->identName, ident.toString().c_str())) {
+            indexFound = index;
+        }
+    }
+    return new PmseSortedDataInterface(ident, desc, _dbPath, indexFound->tree);
 }
 
 Status PmseEngine::dropIdent(OperationContext* opCtx, StringData ident) {
     stdx::lock_guard<stdx::mutex> lock(_pmutex);
     boost::filesystem::path path(_dbPath);
     _identList->deleteKV(ident.toString().c_str());
-    if (_poolHandler.count(ident.toString()) > 0) {
-        _poolHandler[ident.toString()].close();
-        _poolHandler.erase(ident.toString());
+    try {
+        if (_poolHandler.count(ident.toString()) > 0) {
+            _poolHandler.at(ident.toString()).close();
+            _poolHandler.erase(ident.toString());
+        }
+    } catch (std::exception &e) {
+        log() << "Ident drop failure: " << e.what();
     }
     boost::filesystem::remove_all(path.string() + ident.toString());
     return Status::OK();

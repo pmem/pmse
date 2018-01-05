@@ -64,62 +64,42 @@ PmseRecordStore::PmseRecordStore(StringData ns,
     : RecordStore(ns), _cappedCallback(nullptr),
       _options(options), _dbPath(dbpath) {
     log() << "ns: " << ns;
-    if (pool_handler->count(ident.toString()) > 0) {
-        _mapPool = pool<root>((*pool_handler)[ident.toString()]);
-    } else {
-        std::string filepath = _dbPath.toString() + ident.toString();
-        boost::filesystem::path path;
-        log() << filepath;
-        if (ns.toString() == "local.startup_log" &&
-            boost::filesystem::exists(filepath)) {
-            log() << "Delete old startup log";
-            boost::filesystem::remove_all(filepath);
-        }
-        std::string mapper_filename = _dbPath.toString() + ident.toString();
-        if (!boost::filesystem::exists(mapper_filename.c_str())) {
-            try {
-                _mapPool = pool<root>::create(mapper_filename, "pmse_mapper",
-                                              (isSystemCollection(ns) ? 4 : 200)
-                                              * PMEMOBJ_MIN_POOL, 0664);
-            } catch (std::exception &e) {
-                log() << "Error handled: " << e.what();
-                throw;
-            }
-        } else {
-            try {
-                _mapPool = pool<root>::open(mapper_filename, "pmse_mapper");
-            } catch (std::exception &e) {
-                log() << "Error handled: " << e.what();
-                throw;
-            }
-        }
-        pool_handler->insert(std::pair<std::string, pool_base>(ident.toString(),
-                                                               _mapPool));
+
+    persistent_ptr<struct Root> mapper_root;
+    try {
+        _mapPool = pool<Root>(pool_handler->at(ident.toString()));
+        mapper_root = _mapPool.get_root();
+    } catch (std::exception &e) {
+        throw;
     }
-    auto mapper_root = _mapPool.get_root();
-    if (!mapper_root->kvmap_root_ptr) {
-        transaction::exec_tx(_mapPool, [mapper_root, options, ns] {
-            mapper_root->kvmap_root_ptr = make_persistent<PmseMap<InitData>>(options.capped,
-                                                                             options.cappedMaxDocs,
-                                                                             options.cappedSize,
-                                                                             isSystemCollection(ns));
-        });
-        _mapper = mapper_root->kvmap_root_ptr;
-        _mapper->initialize(true);
-    } else {
-        _mapper = mapper_root->kvmap_root_ptr;
-        if (_mapper->isInitialized()) {
-            _mapper->initialize(false);
-        } else {
+
+    try {
+        if (!mapper_root->kvmap_root_ptr) {
+            transaction::exec_tx(_mapPool, [mapper_root, options, ns] {
+                mapper_root->kvmap_root_ptr = make_persistent<PmseMap<InitData>>(options.capped,
+                    options.cappedMaxDocs,
+                    options.cappedSize,
+                    isSystemCollection(ns));
+            });
+            _mapper = mapper_root->kvmap_root_ptr;
             _mapper->initialize(true);
-        }
-        transaction::exec_tx(_mapPool, [this, recoveryNeeded] {
-            if (recoveryNeeded) {
-                _mapper->recover();
+        } else {
+            _mapper = mapper_root->kvmap_root_ptr;
+            if (_mapper->isInitialized()) {
+                _mapper->initialize(false);
             } else {
-                _mapper->restoreCounters();
+                _mapper->initialize(true);
             }
-        });
+            transaction::exec_tx(_mapPool, [this, recoveryNeeded] {
+                if (recoveryNeeded) {
+                    _mapper->recover();
+                } else {
+                    _mapper->restoreCounters();
+                }
+            });
+        }
+    } catch (std::exception &e) {
+        throw;
     }
 }
 

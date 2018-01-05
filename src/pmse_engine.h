@@ -145,6 +145,11 @@ class PmseEngine : public KVEngine {
     void setJournalListener(JournalListener* jl) final {}
 
  private:
+    bool isSystemCollection(const StringData& ns) {
+        return ns.toString() == "local.startup_log" ||
+               ns.toString() == "admin.system.version" ||
+               ns.toString() == "_mdb_catalog";
+    }
     stdx::mutex _pmutex;
     bool _needCheck;
     std::map<std::string, pool_base> _poolHandler;

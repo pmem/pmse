@@ -54,31 +54,12 @@ const int TempKeyMaxSize = 1024;
 PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
                                                  const IndexDescriptor* desc,
                                                  StringData dbpath,
-                                                 std::map<std::string, pool_base> *pool_handler)
-    : _dbpath(dbpath), _desc(desc) {
+                                                 persistent_ptr<PmseTree> tree)
+    : _dbpath(dbpath), _tree(tree), _desc(desc) {
     try {
-        if (pool_handler->count(ident.toString()) > 0) {
-            _pm_pool = pool<PmseTree>((*pool_handler)[ident.toString()]);
-        } else {
-            std::string filepath = _dbpath.toString() + ident.toString();
-            if (desc->parentNS() == "local.startup_log" &&
-                boost::filesystem::exists(filepath)) {
-                log() << "Delete old startup log";
-                boost::filesystem::remove_all(filepath);
-            }
-            if (!boost::filesystem::exists(filepath)) {
-                _pm_pool = pool<PmseTree>::create(filepath.c_str(), "pmse_index",
-                                                  (isSystemCollection(desc->parentNS()) ? 10 : 30)
-                                                  * PMEMOBJ_MIN_POOL, 0664);
-            } else {
-                _pm_pool = pool<PmseTree>::open(filepath.c_str(), "pmse_index");
-            }
-            pool_handler->insert(std::pair<std::string, pool_base>(ident.toString(),
-                                                                   _pm_pool));
-        }
-        _tree = _pm_pool.get_root();
+        _pm_pool = pool<Root>(pool_by_pptr(_tree));
     } catch (std::exception &e) {
-        log() << "Error handled: " << e.what();
+        log() << "Error handled while creating Index: " << e.what();
         throw Status(ErrorCodes::CannotCreateIndex, "Cannot create/open pool while creating index");
     }
 }

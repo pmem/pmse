@@ -107,7 +107,7 @@ RemoveChange::~RemoveChange() {
 void RemoveChange::commit() {}
 void RemoveChange::rollback() {
     persistent_ptr<InitData> obj;
-    _mapper = pool<root>(_pop).get_root()->kvmap_root_ptr;
+    _mapper = pool<Root>(_pop).get_root()->kvmap_root_ptr;
     try {
         transaction::exec_tx(_pop, [this, &obj] {
             obj = pmemobj_tx_alloc(sizeof(InitData::size) + _cachedData->size, 1);
@@ -134,7 +134,7 @@ void UpdateChange::commit() {}
 void UpdateChange::rollback() {
     persistent_ptr<InitData> obj;
     try {
-        _mapper = pool<root>(_pop).get_root()->kvmap_root_ptr;
+        _mapper = pool<Root>(_pop).get_root()->kvmap_root_ptr;
         transaction::exec_tx(_pop, [this, &obj] {
             obj = pmemobj_tx_alloc(sizeof(InitData::size) + _cachedData->size, 1);
             obj->size = _cachedData->size;

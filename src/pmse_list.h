@@ -76,6 +76,7 @@ class PmseList {
     void deleteKV(const char key[]);
     void update(const char key[], const char value[]);
     bool hasKey(const char key[]);
+    std::string findFirstValue(const char value[]);
     std::vector<std::string> getKeys();
     const char* find(const char key[], bool &status);
     void clear();

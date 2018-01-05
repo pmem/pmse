@@ -330,8 +330,15 @@ class PmseMap {
     }
 };
 
-struct root {
+struct Index {
+    persistent_ptr<PmseTree> tree;
+    persistent_ptr<Index> next;
+    char identName[255];
+};
+
+struct Root {
     persistent_ptr<PmseMap<InitData>> kvmap_root_ptr;
+    persistent_ptr<Index> index;
 };
 }  // namespace mongo
 #endif  // SRC_PMSE_MAP_H_

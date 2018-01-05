@@ -33,6 +33,7 @@
 #ifndef SRC_PMSE_SORTED_DATA_INTERFACE_H_
 #define SRC_PMSE_SORTED_DATA_INTERFACE_H_
 
+#include "pmse_map.h"
 #include "pmse_tree.h"
 
 #include <libpmemobj.h>
@@ -52,8 +53,7 @@ namespace mongo {
 class PmseSortedDataInterface : public SortedDataInterface {
  public:
     PmseSortedDataInterface(StringData ident, const IndexDescriptor* desc,
-                            StringData dbpath, std::map<std::string,
-                            pool_base> *pool_handler);
+                            StringData dbpath, persistent_ptr<PmseTree> tree);
 
     virtual SortedDataBuilderInterface* getBulkBuilder(OperationContext* txn,
                                                        bool dupsAllowed);
@@ -98,7 +98,7 @@ class PmseSortedDataInterface : public SortedDataInterface {
  private:
     static bool isSystemCollection(const StringData& ns);
     StringData _dbpath;
-    pool<PmseTree> _pm_pool;
+    pool<Root> _pm_pool;
     persistent_ptr<PmseTree> _tree;
     const IndexDescriptor* _desc;
 };
