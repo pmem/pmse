@@ -26,18 +26,11 @@
  *    it in the license file.
  */
 
-#include "mongo/platform/basic.h"
-
-#include <libpmemobj.h>
-#include <time.h>
 #include <cstdlib>
-#include <libpmemobj++/mutex.hpp>
-#include <libpmemobj++/p.hpp>
-#include <libpmemobj++/persistent_ptr.hpp>
-#include <libpmemobj++/pool.hpp>
 #include <memory>
-#include <sstream>
 #include <string>
+
+#include "mongo/platform/basic.h"
 #include "mongo/base/checked_cast.h"
 #include "mongo/base/init.h"
 #include "mongo/base/string_data.h"
@@ -45,9 +38,6 @@
 #include "mongo/db/catalog/collection_options.h"
 #include "mongo/db/concurrency/write_conflict_exception.h"
 #include "mongo/db/json.h"
-#include "mongo/db/modules/pmse/src/pmse_engine.h"
-#include "mongo/db/modules/pmse/src/pmse_record_store.h"
-#include "mongo/db/modules/pmse/src/pmse_recovery_unit.h"
 #include "mongo/db/operation_context_noop.h"
 #include "mongo/db/storage/kv/kv_engine_test_harness.h"
 #include "mongo/db/storage/kv/kv_prefix.h"
@@ -59,90 +49,97 @@
 #include "mongo/util/fail_point.h"
 #include "mongo/util/scopeguard.h"
 
+#include "mongo/db/modules/pmse/src/pmse_engine.h"
+#include "mongo/db/modules/pmse/src/pmse_record_store.h"
+#include "mongo/db/modules/pmse/src/pmse_recovery_unit.h"
+
+#include <libpmemobj.h>
+#include <libpmemobj++/mutex.hpp>
+#include <libpmemobj++/p.hpp>
+#include <libpmemobj++/persistent_ptr.hpp>
+#include <libpmemobj++/pool.hpp>
+
 namespace mongo {
-namespace {
 
 using std::unique_ptr;
 using std::string;
 
 class PmseHarnessHelper final : public RecordStoreHarnessHelper {
  public:
-  PmseHarnessHelper() : _dbpath("psmem_0"), _engine(_dbpath.path() + "/") {
-  }
+    PmseHarnessHelper() : _dbpath("psmem_0"), _engine(_dbpath.path()) {
+    }
 
-  ~PmseHarnessHelper() {
-  }
+    ~PmseHarnessHelper() {
+    }
 
-  virtual std::unique_ptr<RecordStore> newNonCappedRecordStore() {
-    return newNonCappedRecordStore("a.b");
-  }
+    virtual std::unique_ptr<RecordStore> newNonCappedRecordStore() {
+        return newNonCappedRecordStore("a.b");
+    }
 
-  virtual std::unique_ptr<RecordStore> newNonCappedRecordStore(
-      const std::string& ns) {
-    PmseRecoveryUnit* ru =
-        dynamic_cast<PmseRecoveryUnit*>(_engine.newRecoveryUnit());
-    OperationContextNoop opCtx(ru);
-    string uri = "table:" + ns;
+    virtual std::unique_ptr<RecordStore> newNonCappedRecordStore(const std::string& ns) {
+        PmseRecoveryUnit* ru =
+            dynamic_cast<PmseRecoveryUnit*>(_engine.newRecoveryUnit());
+        OperationContextNoop opCtx(ru);
+        string uri = "table:" + ns;
 
-    CollectionOptions options;
-    options.capped = false;
-    options.cappedSize = -1;
-    options.cappedMaxDocs = -1;
+        CollectionOptions options;
+        options.capped = false;
+        options.cappedSize = -1;
+        options.cappedMaxDocs = -1;
 
-    std::map<std::string, pool_base> pool_handler;
-    auto ret = stdx::make_unique<PmseRecordStore>(
-        ns, "pool_test", options, _dbpath.path() + "/", &pool_handler);
+        std::map<std::string, pool_base> pool_handler;
+        auto ret = stdx::make_unique<PmseRecordStore>(
+            ns, "pool_test", options, _dbpath.path() + "/", &pool_handler);
 
-    return std::move(ret);
-  }
+        return std::move(ret);
+    }
 
-  virtual std::unique_ptr<RecordStore> newCappedRecordStore(
-      int64_t cappedSizeBytes, int64_t cappedMaxDocs) final {
-    return newCappedRecordStore("a.b", cappedSizeBytes, cappedMaxDocs);
-  }
+    virtual std::unique_ptr<RecordStore> newCappedRecordStore(
+        int64_t cappedSizeBytes, int64_t cappedMaxDocs) final {
+        return newCappedRecordStore("a.b", cappedSizeBytes, cappedMaxDocs);
+    }
 
-  virtual std::unique_ptr<RecordStore> newCappedRecordStore(
-      const std::string& ns, int64_t cappedMaxSize, int64_t cappedMaxDocs) {
-    PmseRecoveryUnit* ru =
-        dynamic_cast<PmseRecoveryUnit*>(_engine.newRecoveryUnit());
-    OperationContextNoop opCtx(ru);
-    string uri = "table:a.b";
+    virtual std::unique_ptr<RecordStore> newCappedRecordStore(
+        const std::string& ns, int64_t cappedMaxSize, int64_t cappedMaxDocs) {
+        PmseRecoveryUnit* ru =
+            dynamic_cast<PmseRecoveryUnit*>(_engine.newRecoveryUnit());
+        OperationContextNoop opCtx(ru);
+        string uri = "table:a.b";
 
-    CollectionOptions options;
-    options.capped = true;
-    options.cappedSize = cappedMaxSize;
-    options.cappedMaxDocs = cappedMaxDocs;
+        CollectionOptions options;
+        options.capped = true;
+        options.cappedSize = cappedMaxSize;
+        options.cappedMaxDocs = cappedMaxDocs;
 
-    std::map<std::string, pool_base> pool_handler;
-    auto ret = stdx::make_unique<PmseRecordStore>(
-        ns, "pool_test", options, _dbpath.path() + "/", &pool_handler);
+        std::map<std::string, pool_base> pool_handler;
+        auto ret = stdx::make_unique<PmseRecordStore>(
+            ns, "pool_test", options, _dbpath.path() + "/", &pool_handler);
 
-    return std::move(ret);
-  }
+        return std::move(ret);
+    }
 
-  virtual std::unique_ptr<RecoveryUnit> newRecoveryUnit() final {
-    return std::unique_ptr<RecoveryUnit>(_engine.newRecoveryUnit());
-  }
+    virtual std::unique_ptr<RecoveryUnit> newRecoveryUnit() final {
+        return std::unique_ptr<RecoveryUnit>(_engine.newRecoveryUnit());
+    }
 
-  virtual bool supportsDocLocking() final {
-    return true;
-  }
+    virtual bool supportsDocLocking() final {
+        return true;
+    }
 
  private:
-  unittest::TempDir _dbpath;
-  ClockSourceMock _cs;
+    unittest::TempDir _dbpath;
+    ClockSourceMock _cs;
 
-  PmseEngine _engine;
+    PmseEngine _engine;
 };
 
 std::unique_ptr<HarnessHelper> makeHarnessHelper() {
-  return stdx::make_unique<PmseHarnessHelper>();
+    return stdx::make_unique<PmseHarnessHelper>();
 }
 
 MONGO_INITIALIZER(RegisterHarnessFactory)(InitializerContext* const) {
-  mongo::registerHarnessHelperFactory(makeHarnessHelper);
-  return Status::OK();
+    mongo::registerHarnessHelperFactory(makeHarnessHelper);
+    return Status::OK();
 }
 
-}  // namespace
 }  // mongo

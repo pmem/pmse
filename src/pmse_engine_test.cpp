@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017, Intel Corporation
+ * Copyright 2014-2018, Intel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,57 +31,56 @@
  */
 
 #include "mongo/platform/basic.h"
+#include "mongo/base/init.h"
+#include "mongo/db/storage/kv/kv_engine_test_harness.h"
+#include "mongo/stdx/memory.h"
+#include "mongo/unittest/temp_dir.h"
+#include "mongo/util/clock_source_mock.h"
+
+#include "mongo/db/modules/pmse/src/pmse_engine.h"
+#include "mongo/db/modules/pmse/src/pmse_record_store.h"
 
 #include <libpmemobj.h>
 #include <libpmemobj++/mutex.hpp>
 #include <libpmemobj++/p.hpp>
 #include <libpmemobj++/persistent_ptr.hpp>
 #include <libpmemobj++/pool.hpp>
-#include "mongo/base/init.h"
-#include "mongo/db/modules/pmse/src/pmse_engine.h"
-#include "mongo/db/modules/pmse/src/pmse_record_store.h"
-#include "mongo/db/storage/kv/kv_engine_test_harness.h"
-#include "mongo/stdx/memory.h"
-#include "mongo/unittest/temp_dir.h"
-#include "mongo/util/clock_source_mock.h"
 
 namespace mongo {
-namespace {
 
 class PmseKVHarnessHelper : public KVHarnessHelper {
  public:
-  PmseKVHarnessHelper() : _dbpath("psmem_0") {
-    _engine.reset(new PmseEngine(_dbpath.path() + "/"));
-  }
+    PmseKVHarnessHelper() : _dbpath("psmem_0") {
+        _engine.reset(new PmseEngine(_dbpath.path()));
+    }
 
-  virtual ~PmseKVHarnessHelper() {
-    _engine.reset(NULL);
-  }
+    virtual ~PmseKVHarnessHelper() {
+        _engine.reset(NULL);
+    }
 
-  virtual KVEngine* restartEngine() {
-    _engine.reset(NULL);
-    _engine.reset(new PmseEngine(_dbpath.path() + "/"));
-    return _engine.get();
-  }
+    virtual KVEngine* restartEngine() {
+        _engine.reset(NULL);
+        _engine.reset(new PmseEngine(_dbpath.path() + "/"));
+        return _engine.get();
+    }
 
-  virtual KVEngine* getEngine() {
-    return _engine.get();
-  }
+    virtual KVEngine* getEngine() {
+        return _engine.get();
+    }
 
  private:
-  const std::unique_ptr<ClockSource> _cs = stdx::make_unique<ClockSourceMock>();
-  unittest::TempDir _dbpath;
-  std::unique_ptr<PmseEngine> _engine;
+    const std::unique_ptr<ClockSource> _cs = stdx::make_unique<ClockSourceMock>();
+    unittest::TempDir _dbpath;
+    std::unique_ptr<PmseEngine> _engine;
 };
 
 std::unique_ptr<KVHarnessHelper> makeHelper() {
-  return stdx::make_unique<PmseKVHarnessHelper>();
+    return stdx::make_unique<PmseKVHarnessHelper>();
 }
 
 MONGO_INITIALIZER(RegisterKVHarnessFactory)(InitializerContext*) {
-  KVHarnessHelper::registerFactory(makeHelper);
-  return Status::OK();
+    KVHarnessHelper::registerFactory(makeHelper);
+    return Status::OK();
 }
 
-}  // namespace
 }  // namespace mongo
