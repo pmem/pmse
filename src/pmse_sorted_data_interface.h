@@ -100,7 +100,7 @@ class PmseSortedDataInterface : public SortedDataInterface {
     StringData _dbpath;
     pool<PmseTree> _pm_pool;
     persistent_ptr<PmseTree> _tree;
-    const IndexDescriptor* _desc;
+    IndexDescriptor _desc;
 };
 }  // namespace mongo
 #endif  // SRC_PMSE_SORTED_DATA_INTERFACE_H_
