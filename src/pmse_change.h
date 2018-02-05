@@ -128,17 +128,17 @@ class InsertIndexChange : public RecoveryUnit::Change {
 
 class RemoveIndexChange : public RecoveryUnit::Change {
  public:
-    RemoveIndexChange(pool_base pop, BSONObj key, RecordId loc,
+    RemoveIndexChange(persistent_ptr<PmseTree> tree, pool_base pop, BSONObj key, RecordId loc,
                       bool dupsAllowed, BSONObj ordering);
     virtual void rollback();
     virtual void commit();
  private:
+    persistent_ptr<PmseTree> _tree;
     pool_base _pop;
     BSONObj _key;
     RecordId _loc;
     bool _dupsAllowed;
     BSONObj _ordering;
-    persistent_ptr<PmseTree> _tree;
 };
 
 }  // namespace mongo

@@ -167,15 +167,20 @@ void InsertIndexChange::rollback() {
     }
 }
 
-RemoveIndexChange::RemoveIndexChange(pool_base pop, BSONObj key, RecordId loc,
+RemoveIndexChange::RemoveIndexChange(persistent_ptr<PmseTree> tree, pool_base pop, BSONObj key, RecordId loc,
                                      bool dupsAllowed, BSONObj ordering)
-        : _pop(pop), _key(key), _loc(loc),
+        : _tree(tree), _pop(pop), _key(key), _loc(loc),
           _dupsAllowed(dupsAllowed), _ordering(ordering) {}
 void RemoveIndexChange::commit() {}
-void RemoveIndexChange::rollback() {
-    Status status = Status::OK();
-    IndexKeyEntry entry(_key.getOwned(), _loc);
-    status = _tree->insert(_pop, entry, _ordering, _dupsAllowed);
+void RemoveIndexChange::rollback() {	
+    try {
+        transaction::exec_tx(_pop, [this] {
+            IndexKeyEntry entry(_key.getOwned(), _loc);
+            _tree->insert(_pop, entry, _ordering, _dupsAllowed);
+        });
+    } catch (std::exception &e) {
+        log() << e.what();
+    }
 }
 
 }  // namespace mongo

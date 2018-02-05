@@ -152,16 +152,9 @@ void PmseCursor::locate(const BSONObj& key, const RecordId& loc, std::list<pmem:
             _cursor.node = locateCursor.node;
             _cursor.index = locateCursor.index;
             int cmp;
-                cmp = (_cursor.node->keys[_cursor.index]).getBSON().woCompare(query.key, _ordering, false);
-                if (cmp == 0) {
-                    if ((_cursor.node->keys[_cursor.index]).loc < query.loc.repr()) {
-                        cmp = -1;
-                    } else if ((_cursor.node->keys[_cursor.index]).loc > query.loc.repr()) {
-                        cmp = 1;
-                    } else {
-                        cmp = 0;
-                    }
-                }
+            IndexEntryComparison c(Ordering::make(_ordering));
+            cmp = c.compare(IndexKeyEntry(_cursor.node->keys[_cursor.index].getBSON(), RecordId(_cursor.node->keys[_cursor.index].loc)), query);
+
             if (cmp) {
                 moveToNext(locks);
                 if(!_cursor.node) {
@@ -425,6 +418,7 @@ void PmseCursor::save() {}
 void PmseCursor::saveUnpositioned() {}
 
 void PmseCursor::restore() {
+    seekEndCursor();
     if (_eofRestore)
         return;
 }
