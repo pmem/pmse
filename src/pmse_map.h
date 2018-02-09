@@ -207,7 +207,7 @@ class PmseMap {
                 }
                 initialize(true);
             });
-            _counter = 0;
+            _counter = 1;
             _hashmapSize = 0;
             _dataSize = 0;
             _pmCounter = 0;

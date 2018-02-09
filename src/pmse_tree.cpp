@@ -53,18 +53,8 @@ namespace mongo {
 int64_t IndexKeyEntry_PM::compareEntries(IndexKeyEntry& leftEntry,
                                          IndexKeyEntry_PM& rightEntry,
                                          const BSONObj& ordering) {
-    int cmp;
-
-    cmp = leftEntry.key.woCompare(rightEntry.getBSON(), ordering, false);
-    if (cmp != 0)
-        return cmp;
-    // when entries keys are equal, compare RecordID
-    if (leftEntry.loc.repr() < rightEntry.loc)
-        return -1;
-    else if (leftEntry.loc.repr() > rightEntry.loc)
-        return 1;
-    else
-        return 0;
+    IndexEntryComparison c(Ordering::make(ordering));
+    return c.compare(leftEntry, IndexKeyEntry(rightEntry.getBSON(), RecordId(rightEntry.loc)));
 }
 
 BSONObj IndexKeyEntry_PM::getBSON() {
