@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017, Intel Corporation
+ * Copyright 2014-2018, Intel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -50,14 +50,13 @@ PmseCursor::PmseCursor(OperationContext* txn, bool isForward,
       _first(tree->_first),
       _last(tree->_last),
       _tree(tree),
-      _endPositionIsDataEnd(false),
       _locateFoundDataEnd(false),
       _eofRestore(false) {}
 
     // Find entry in tree which is equal or bigger to input entry
     // Locates input cursor on that entry
     // Sets _locateFoundDataEnd when result is after last entry in tree
-bool PmseCursor::lower_bound(IndexKeyEntry entry, CursorObject& cursor, std::list<nvml::obj::shared_mutex*>& locks) {
+bool PmseCursor::lower_bound(IndexKeyEntry entry, CursorObject& cursor, std::list<pmem::obj::shared_mutex*>& locks) {
     uint64_t i = 0;
     int64_t cmp;
     persistent_ptr<PmseTreeNode> current = _tree->_root;
@@ -129,7 +128,7 @@ bool PmseCursor::atOrPastEndPointAfterSeeking() {
     }
 }
 
-void PmseCursor::locate(const BSONObj& key, const RecordId& loc, std::list<nvml::obj::shared_mutex*>& locks) {
+void PmseCursor::locate(const BSONObj& key, const RecordId& loc, std::list<pmem::obj::shared_mutex*>& locks) {
     bool locateFound;
     CursorObject locateCursor;
     _isEOF = false;
@@ -158,6 +157,10 @@ void PmseCursor::locate(const BSONObj& key, const RecordId& loc, std::list<nvml:
 
             if (cmp) {
                 moveToNext(locks);
+                if(!_cursor.node) {
+                    _isEOF = true;
+                    return;
+                }
             }
         }
     }
@@ -171,16 +174,17 @@ void PmseCursor::seekEndCursor() {
 
     if (!_endState || !_tree->_root)
         return;
-    std::list<nvml::obj::shared_mutex*> locks;
+    std::list<pmem::obj::shared_mutex*> locks;
     found = lower_bound(_endState->query, endCursor, locks);
     if (_locateFoundDataEnd) {
-        _endPositionIsDataEnd = true;
         _locateFoundDataEnd = false;
+        endCursor.node = nullptr;
+        unlockTree(locks);
+        return;
     }
     if (!_forward) {
         // lower_bound lands us on or after query. Reverse cursors must be on or before.
         if ( (endCursor.node == _first) && (endCursor.index == 0) ) {
-            _endPositionIsDataEnd = true;
             unlockTree(locks);
             return;
         }
@@ -240,11 +244,15 @@ bool PmseCursor::atEndPoint() {
 
 boost::optional<IndexKeyEntry> PmseCursor::next(
                 RequestedInfo parts = kKeyAndLoc) {
-    std::list<nvml::obj::shared_mutex *> locks;
+    std::list<pmem::obj::shared_mutex *> locks;
 
     if (_tree->_root == nullptr)
         return {};
     locate(_cursorKey, RecordId(_cursorId), locks);
+    if (!_cursor.node) {
+            unlockTree(locks);
+            return boost::none;
+    }
     IndexEntryComparison c(Ordering::make(_ordering));
     if ( c.compare(IndexKeyEntry(_cursorKey, RecordId(_cursorId)),
                     IndexKeyEntry((_cursor.node->keys[_cursor.index]).getBSON(),
@@ -273,7 +281,8 @@ boost::optional<IndexKeyEntry> PmseCursor::next(
     return entry;
 }
 
-void PmseCursor::moveToNext(std::list<nvml::obj::shared_mutex*>& locks) {
+void PmseCursor::moveToNext(std::list<pmem::obj::shared_mutex*>& locks) {
+    persistent_ptr<PmseTreeNode> node;
     if (_forward) {
         /*
          * There are next keys - increment index
@@ -285,8 +294,9 @@ void PmseCursor::moveToNext(std::list<nvml::obj::shared_mutex*>& locks) {
              * Move to next node - if it exist
              */
             if (_cursor.node->next != nullptr) {
-                _cursor.node->next->_pmutex.lock_shared();
-                locks.push_back(&(_cursor.node->next->_pmutex));
+                node = _cursor.node->next;
+                node->_pmutex.lock_shared();
+                locks.push_back(&(node->_pmutex));
                 _cursor.node = _cursor.node->next;
                 _cursor.index = 0;
             } else {
@@ -304,8 +314,9 @@ void PmseCursor::moveToNext(std::list<nvml::obj::shared_mutex*>& locks) {
              * Move to prev node - if it exist
              */
             if (_cursor.node->previous != nullptr) {
-                _cursor.node->previous->_pmutex.lock_shared();
-                locks.push_back(&(_cursor.node->previous->_pmutex));
+                node = _cursor.node->previous;
+                node->_pmutex.lock_shared();
+                locks.push_back(&(node->_pmutex));
                 _cursor.node = _cursor.node->previous;
                 _cursor.index = _cursor.node->num_keys - 1;
             } else {
@@ -315,8 +326,8 @@ void PmseCursor::moveToNext(std::list<nvml::obj::shared_mutex*>& locks) {
     }
 }
 
-void PmseCursor::unlockTree(std::list<nvml::obj::shared_mutex*>& locks) {
-    std::list<nvml::obj::shared_mutex*>::const_iterator iterator;
+void PmseCursor::unlockTree(std::list<pmem::obj::shared_mutex*>& locks) {
+    std::list<pmem::obj::shared_mutex*>::const_iterator iterator;
     try {
         for (iterator = locks.begin(); iterator != locks.end(); ++iterator) {
             (*iterator)->unlock_shared();
@@ -330,7 +341,7 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const BSONObj& key,
                                                 RequestedInfo parts = kKeyAndLoc) {
     if (!_tree->_root)
         return {};
-    std::list<nvml::obj::shared_mutex*> locks;
+    std::list<pmem::obj::shared_mutex*> locks;
 
     if (key.isEmpty()) {
         if (inclusive) {
@@ -371,7 +382,7 @@ boost::optional<IndexKeyEntry> PmseCursor::seek(const IndexSeekPoint& seekPoint,
 
     const BSONObj query = IndexEntryComparison::makeQueryObject(seekPoint, _forward);
     auto discriminator = RecordId::min();
-    std::list<nvml::obj::shared_mutex*> locks;
+    std::list<pmem::obj::shared_mutex*> locks;
     locate(query, _forward ? RecordId::min() : RecordId::max(), locks);
 
     if (_isEOF) {

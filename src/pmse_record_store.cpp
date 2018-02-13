@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017, Intel Corporation
+ * Copyright 2014-2018, Intel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -51,7 +51,7 @@
 #include "mongo/db/storage/recovery_unit.h"
 #include "mongo/db/operation_context.h"
 
-using nvml::obj::transaction;
+using pmem::obj::transaction;
 
 namespace mongo {
 
@@ -75,12 +75,11 @@ PmseRecordStore::PmseRecordStore(StringData ns,
             log() << "Delete old startup log";
             boost::filesystem::remove_all(filepath);
         }
-
         std::string mapper_filename = _dbPath.toString() + ident.toString();
         if (!boost::filesystem::exists(mapper_filename.c_str())) {
             try {
                 _mapPool = pool<root>::create(mapper_filename, "pmse_mapper",
-                                              (isSystemCollection(ns) ? 40 : 80)
+                                              (isSystemCollection(ns) ? 4 : 200)
                                               * PMEMOBJ_MIN_POOL, 0664);
             } catch (std::exception &e) {
                 log() << "Error handled: " << e.what();
@@ -97,9 +96,7 @@ PmseRecordStore::PmseRecordStore(StringData ns,
         pool_handler->insert(std::pair<std::string, pool_base>(ident.toString(),
                                                                _mapPool));
     }
-
     auto mapper_root = _mapPool.get_root();
-
     if (!mapper_root->kvmap_root_ptr) {
         transaction::exec_tx(_mapPool, [mapper_root, options, ns] {
             mapper_root->kvmap_root_ptr = make_persistent<PmseMap<InitData>>(options.capped,
@@ -165,7 +162,7 @@ Status PmseRecordStore::updateRecord(OperationContext* txn, const RecordId& oldL
                                      const char* data, int len, bool enforceQuota,
                                      UpdateNotifier* notifier) {
     persistent_ptr<InitData> obj;
-    stdx::lock_guard<nvml::obj::mutex> lock(_mapper->_listMutex[oldLocation.repr() % _mapper->getHashmapSize()]);
+    stdx::lock_guard<pmem::obj::mutex> lock(_mapper->_listMutex[oldLocation.repr() % _mapper->getHashmapSize()]);
     try {
         transaction::exec_tx(_mapPool, [&obj, len, data, txn, oldLocation, this] {
             obj = pmemobj_tx_alloc(sizeof(InitData::size) + len, 1);
@@ -187,7 +184,7 @@ Status PmseRecordStore::updateRecord(OperationContext* txn, const RecordId& oldL
 
 void PmseRecordStore::deleteRecord(OperationContext* txn,
                                    const RecordId& dl) {
-    stdx::lock_guard<nvml::obj::mutex> lock(_mapper->_listMutex[dl.repr() % _mapper->getHashmapSize()]);
+    stdx::lock_guard<pmem::obj::mutex> lock(_mapper->_listMutex[dl.repr() % _mapper->getHashmapSize()]);
     persistent_ptr<KVPair> p;
     if (_mapper->getPair(dl.repr(), &p)) {
         _mapper->remove((uint64_t) dl.repr(), txn);
@@ -244,9 +241,53 @@ Status PmseRecordStore::insertRecordsWithDocWriter(OperationContext* txn,
                                                    const Timestamp* timestamps,
                                                    size_t nDocs,
                                                    RecordId* idsOut) {
-    // TODO(kfilipek): Implement insertRecordsWithDocWriter
-    log() << "Not implemented: insertRecordsWithDocWriter";
-    return Status::OK();
+    std::unique_ptr<Record[]> records(new Record[nDocs]);
+
+    size_t totalSize = 0;
+    for (size_t i = 0; i < nDocs; i++) {
+        const size_t docSize = docs[i]->documentSize();
+        records[i].data = RecordData(nullptr, docSize);
+        totalSize += docSize;
+    }
+
+    std::unique_ptr<char[]> buffer(new char[totalSize]);
+    char *pos = buffer.get();
+    for (size_t i = 0; i < nDocs; i++) {
+        docs[i]->writeDocument(pos);
+        const size_t size = records[i].data.size();
+        records[i].data = RecordData(pos, size);
+        pos += size;
+    }
+    invariant(pos == (buffer.get() + totalSize));
+
+    int64_t totalLength = 0;
+    for (size_t i = 0; i < nDocs; i++)
+        totalLength += records[i].data.size();
+    if (isCapped() && totalLength > static_cast<int>(_mapper->getMax()))
+        return Status(ErrorCodes::BadValue, "object to insert exceeds cappedMaxSize");
+    RecordId highestId = RecordId();
+    dassert(nDocs != 0);
+
+    auto s = Status::OK();
+    for (size_t i = 0; i < nDocs; i++) {
+        auto& record = records[i];
+        auto sRecId = insertRecord(txn, record.data.data(), record.data.size(), timestamps[i], false);
+        if (sRecId.isOK()) {
+            record.id = sRecId.getValue();
+        } else {
+            s = Status(ErrorCodes::BadValue, "object to insert exceeds cappedMaxSize");
+            break;
+        }
+    }
+
+    if (!s.isOK())
+        return s;
+    if (idsOut) {
+        for (size_t i = 0; i < nDocs; i++) {
+            idsOut[i] = records[i].id;
+        }
+    }
+    return s;
 }
 
 void PmseRecordStore::waitForAllEarlierOplogWritesToBeVisible(OperationContext* txn) const {
@@ -426,7 +467,7 @@ void PmseRecordCursor::moveToLast() {
         int64_t lastNonEmpty = -1;
         int64_t scope = (_actualListNumber < 0 ? _mapper->_size : static_cast<int64_t>(_actualListNumber));
         for (int64_t i = 0; i < scope; ++i) {
-            if (_mapper->_list[i]->size())
+            if (_mapper->_list[i].size())
                 lastNonEmpty = i;
         }
         if (lastNonEmpty == -1) {
