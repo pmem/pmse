@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017, Intel Corporation
+ * Copyright 2014-2018, Intel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,7 +30,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
 
 #include "pmse_engine.h"
@@ -56,10 +55,10 @@ PmseEngine::PmseEngine(std::string dbpath) : _dbPath(dbpath) {
     if(!boost::algorithm::ends_with(dbpath, "/")) {
         _dbPath = _dbPath +"/";
     }
-    std::string path = _dbPath+_kIdentFilename.toString();
+    std::string path = _dbPath + _kIdentFilename.toString();
     if (!boost::filesystem::exists(path)) {
         pop = pool<ListRoot>::create(path, "pmse_identlist", 4 * PMEMOBJ_MIN_POOL,
-                                      0664);
+                                     0664);
         log() << "Engine pool created";
     } else {
         pop = pool<ListRoot>::open(path, "pmse_identlist");
@@ -75,7 +74,7 @@ PmseEngine::PmseEngine(std::string dbpath) : _dbPath(dbpath) {
         }
         _identList = root->list_root_ptr;
     } catch (std::exception& e) {
-        log() << "Error while creating PMSE engine:" << e.what() << std::endl;
+        log() << "Error while creating PMSE engine:" << e.what();
     }
     _identList->setPool(pop);
     if(!_identList->isAfterSafeShutdown()) {
@@ -111,10 +110,15 @@ std::unique_ptr<RecordStore> PmseEngine::getRecordStore(OperationContext* opCtx,
                                                         StringData ident,
                                                         const CollectionOptions& options) {
     persistent_ptr<PmseMap<InitData>> _mapper;
-    pool<root> mapPoolOld = pool<root>((_poolHandler)[ident.toString()]);
-    auto mapper_root = mapPoolOld.get_root();
-    _mapper = mapper_root->kvmap_root_ptr;
-    _mapper->storeCounters();
+    pool<root> mapPoolOld;
+    try {
+        mapPoolOld = pool<root>((_poolHandler).at(ident.toString()));
+    } catch (std::exception &e) {}
+
+    if (mapPoolOld.get_handle()) {
+        _mapper = mapPoolOld.get_root()->kvmap_root_ptr;
+        _mapper->storeCounters();
+    }
     _identList->update(ident.toString().c_str(), ns.toString().c_str());
     return stdx::make_unique<PmseRecordStore>(ns, ident, options, _dbPath,
                                               &_poolHandler, (_needCheck ? true : false));

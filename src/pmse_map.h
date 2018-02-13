@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017, Intel Corporation
+ * Copyright 2014-2018, Intel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,13 +30,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/*
- * pmstore_map.h
- *
- *  Created on: Sep 22, 2016
- *      Author: kfilipek
- */
-
 #ifndef SRC_PMSE_MAP_H_
 #define SRC_PMSE_MAP_H_
 
@@ -47,9 +40,9 @@
 #include <libpmemobj++/pext.hpp>
 #include <libpmemobj++/pool.hpp>
 #include <libpmemobj++/persistent_ptr.hpp>
-#include <libpmemobj++/make_persistent_array.hpp>
 #include <libpmemobj++/mutex.hpp>
 #include <libpmemobj++/detail/pexceptions.hpp>
+#include <libpmemobj++/make_persistent_array_atomic.hpp>
 
 #include <atomic>
 #include <limits>
@@ -57,7 +50,7 @@
 namespace mongo {
 
 const uint64_t CAPPED_SIZE = 1;
-const uint64_t HASHMAP_SIZE = 1'000'000u;
+const uint64_t HASHMAP_SIZE = 10'000'000u;
 
 class PmseRecordCursor;
 
@@ -72,15 +65,9 @@ class PmseMap {
         : _size(isCapped ? CAPPED_SIZE : (decreaseSize ? size/100 : size)), _isCapped(isCapped) {
         _maxDocuments = maxDoc;
         _sizeOfCollection = sizeOfColl;
-        try {
-            _list = make_persistent<persistent_ptr<PmseListIntPtr>[]>(_size);
-        } catch (std::exception &e) {
-            std::cout << "PmseMap: " << e.what() << std::endl;
-        }
     }
 
     ~PmseMap() {
-        std::cout << "~PmseMap()" << std::endl;
         deinitialize();
     }
 
@@ -89,7 +76,7 @@ class PmseMap {
         if (!id) {
             return 0;
         }
-        stdx::lock_guard<nvml::obj::mutex> lock(_listMutex[id->idValue % _size]);
+        stdx::lock_guard<pmem::obj::mutex> lock(_listMutex[id->idValue % _size]);
         if (!insertKV(id, value)) {
             return 0;
         }
@@ -108,7 +95,7 @@ class PmseMap {
             if ((uint64_t)_dataSize > _sizeOfCollection) {
                 return true;
             }
-            if ((_maxDocuments != 0) && (_list[0]->_size > _maxDocuments))  // number of items exceed
+            if ((_maxDocuments != 0) && (_list[0]._size > _maxDocuments))  // number of items exceed
                 return true;
         }
         return false;
@@ -116,7 +103,7 @@ class PmseMap {
 
     bool insertKV(const persistent_ptr<KVPair> &id, persistent_ptr<T> value) {  // internal use
         try {
-            _list[id->idValue % _size]->insertKV(id, value);
+            _list[id->idValue % _size].insertKV(id, value);
         } catch (std::exception &e) {
             std::cout << "KVMapper: " << e.what() << std::endl;
             return false;
@@ -126,7 +113,7 @@ class PmseMap {
 
     bool insertToFrontKV(const persistent_ptr<KVPair> &id, persistent_ptr<T> value) {  // internal use
         try {
-            _list[id->idValue % _size]->insertKV(id, value, true);
+            _list[id->idValue % _size].insertKV(id, value, true);
         } catch (std::exception &e) {
             std::cout << "KVMapper: " << e.what() << std::endl;
             return false;
@@ -136,7 +123,7 @@ class PmseMap {
 
     bool updateKV(uint64_t id, persistent_ptr<T> value, OperationContext* txn = nullptr) {
         try {
-            _list[id % _size]->update(id, value, txn);
+            _list[id % _size].update(id, value, txn);
         } catch (std::exception &e) {
             std::cout << "KVMapper: " << e.what() << std::endl;
             return false;
@@ -145,52 +132,52 @@ class PmseMap {
     }
 
     bool hasId(uint64_t id) {
-        return _list[id % _size]->hasKey(id);
+        return _list[id % _size].hasKey(id);
     }
 
     bool find(uint64_t id, persistent_ptr<T> *value) {
-        return _list[id % _size]->find(id, value);
+        return _list[id % _size].find(id, value);
     }
 
     bool getPair(uint64_t id, persistent_ptr<KVPair> *value) {
-        return _list[id % _size]->getPair(id, value);
+        return _list[id % _size].getPair(id, value);
     }
 
     bool remove(uint64_t id, OperationContext* txn = nullptr) {
         _hashmapSize.fetch_sub(1);
         persistent_ptr<KVPair> toDeleted;
-        _list[id % _size]->deleteKV(id, toDeleted, txn);
+        _list[id % _size].deleteKV(id, toDeleted, txn);
         moveToDeleted(toDeleted, _deleted);
         return true;
     }
 
     void initialize(bool firstRun) {
         pop = pool_by_vptr(this);
-        transaction::exec_tx(pop, [this, firstRun] {
-            for (int i = 0; i < _size; i++) {
-                if (firstRun) {
-                    try {
-                        _list[i] = make_persistent<PmseListIntPtr>();
-                    } catch(std::exception &e) {
-                        std::cout << e.what() << std::endl;
-                    }
-                }
-                _list[i]->setPool();
+        if (firstRun) {
+            try {
+                make_persistent_atomic<PmseListIntPtr[]>(pop, _list, _size);
+                make_persistent_atomic<pmem::obj::mutex[]>(pop,_listMutex, _size);
+            } catch(std::exception &e) {
+                std::cout << e.what() << std::endl;
             }
-        });
+        }
+        else {
+            for (int i = 0; i < _size; i++) {
+                _list[i].setPool();
+            }
+        }
         _initialized = true;
     }
 
     void deinitialize() {
         _initialized = false;
-        for (int i = 0; i < _size; i++) {
-            delete_persistent<PmseListIntPtr>(_list[i]);
-        }
+        delete_persistent<PmseListIntPtr[]>(_list, _size);
+        delete_persistent<pmem::obj::mutex[]>(_listMutex, _size);
     }
 
     uint64_t fillment() {
         if (_isCapped)
-            return _list[0]->size();
+            return _list[0].size();
         return _hashmapSize;
     }
 
@@ -198,14 +185,9 @@ class PmseMap {
         bool status = true;
         try {
             transaction::exec_tx(pop, [this, txn] {
-                for (int i = 0; i < _size; i++) {
-                    _list[i]->clear(txn, this);
-                    if (txn)
-                        txn->recoveryUnit()->registerChange(new DropListChange(pop, _list, i));
-                    delete_persistent<PmseListIntPtr>(_list[i]);
-                    _list[i] = nullptr;
-                }
-                initialize(true);
+               txn->recoveryUnit()->registerChange(new DropListChange(pop, _list, _size));
+               delete_persistent<PmseListIntPtr[]>(_list, _size);
+               initialize(true);
             });
             _counter = 1;
             _hashmapSize = 0;
@@ -213,10 +195,10 @@ class PmseMap {
             _pmCounter = 0;
             _pmDataSize = 0;
             _pmHashmapSize = 0;
-        } catch (nvml::transaction_alloc_error &e) {
+        } catch (pmem::transaction_alloc_error &e) {
             std::cout << e.what() << std::endl;
             status = false;
-        } catch (nvml::transaction_scope_error &e) {
+        } catch (pmem::transaction_scope_error &e) {
             std::cout << e.what() << std::endl;
             status = false;
         }
@@ -244,7 +226,7 @@ class PmseMap {
     }
 
     void moveToDeleted(persistent_ptr<KVPair> &item, persistent_ptr<KVPair> &list) {
-        stdx::lock_guard<nvml::obj::mutex> guard(_pmutex);
+        stdx::lock_guard<pmem::obj::mutex> guard(_pmutex);
         if (list != nullptr) {
             item->next = list;
             item->isDeleted = true;
@@ -265,8 +247,8 @@ class PmseMap {
         uint64_t deletedSize = 0;
         uint64_t recoveredDataSize = 0;
         for(int i = 0; i < _size; i++) {
-            countedSize += _list[i]->size();
-            recoveredDataSize += _list[i]->getDataSize();
+            countedSize += _list[i].size();
+            recoveredDataSize += _list[i].getDataSize();
         }
         _dataSize = recoveredDataSize;
         _hashmapSize = countedSize;
@@ -293,7 +275,7 @@ class PmseMap {
     bool isInitialized() {
         return _initialized;
     }
-    nvml::obj::mutex _listMutex[HASHMAP_SIZE];
+    persistent_ptr<pmem::obj::mutex[]> _listMutex;
 
  private:
     const int _size;
@@ -308,14 +290,14 @@ class PmseMap {
     p<uint64_t> _pmHashmapSize;
     p<uint64_t> _maxDocuments;
     p<uint64_t> _sizeOfCollection;
-    persistent_ptr<persistent_ptr<PmseListIntPtr>[]> _list;
+    persistent_ptr<PmseListIntPtr[]> _list;
 
-    nvml::obj::mutex _pmutex;
+    pmem::obj::mutex _pmutex;
     persistent_ptr<KVPair> _deleted;
 
     persistent_ptr<KVPair> getFirstPtr(int listNumber) {
         if (listNumber < _size)
-            return _list[listNumber]->_head;
+            return _list[listNumber]._head;
         return {};
     }
 
@@ -334,7 +316,7 @@ class PmseMap {
                 return nullptr;
             }
         } else {
-            stdx::lock_guard<nvml::obj::mutex> guard(_pmutex);
+            stdx::lock_guard<pmem::obj::mutex> guard(_pmutex);
             temp = _deleted;
             _deleted = _deleted->next;
             temp->isDeleted = false;

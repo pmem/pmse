@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2017, Intel Corporation
+ * Copyright 2014-2018, Intel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,7 +40,7 @@
 
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
 
-using namespace nvml::obj;
+using namespace pmem::obj;
 
 namespace mongo {
 
@@ -95,11 +95,11 @@ class PmseCursor final : public SortedDataInterface::Cursor {
         }
         return bb.obj();
     }
-    void locate(const BSONObj& key, const RecordId& loc, std::list<nvml::obj::shared_mutex*>& locks);
-    void unlockTree(std::list<nvml::obj::shared_mutex*>& locks);
+    void locate(const BSONObj& key, const RecordId& loc, std::list<pmem::obj::shared_mutex*>& locks);
+    void unlockTree(std::list<pmem::obj::shared_mutex*>& locks);
     void seekEndCursor();
-    bool lower_bound(IndexKeyEntry entry, CursorObject& cursor, std::list<nvml::obj::shared_mutex*>& locks);
-    void moveToNext(std::list<nvml::obj::shared_mutex*>& locks);
+    bool lower_bound(IndexKeyEntry entry, CursorObject& cursor, std::list<pmem::obj::shared_mutex*>& locks);
+    void moveToNext(std::list<pmem::obj::shared_mutex*>& locks);
     bool atOrPastEndPointAfterSeeking();
     bool atEndPoint();
     const bool _forward;
@@ -121,7 +121,6 @@ class PmseCursor final : public SortedDataInterface::Cursor {
     boost::optional<EndState> _endState;
     BSONObj _cursorKey;
     int64_t _cursorId;
-    bool _endPositionIsDataEnd;
     bool _locateFoundDataEnd;
     bool _eofRestore;
 };
