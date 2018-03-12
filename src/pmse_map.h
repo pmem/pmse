@@ -184,11 +184,9 @@ class PmseMap {
     bool truncate(OperationContext* txn) {
         bool status = true;
         try {
-            transaction::exec_tx(pop, [this, txn] {
-               txn->recoveryUnit()->registerChange(new DropListChange(pop, _list, _size));
-               delete_persistent<PmseListIntPtr[]>(_list, _size);
-               initialize(true);
-            });
+            txn->recoveryUnit()->registerChange(new DropListChange(pop, _list, _size));
+            delete_persistent_atomic<PmseListIntPtr[]>(_list, _size);
+            initialize(true);
             _counter = 1;
             _hashmapSize = 0;
             _dataSize = 0;
