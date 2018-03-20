@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright 2017, Intel Corporation
+# Copyright 2017-2018, Intel Corporation
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -32,8 +32,7 @@
 
 
 from argparse import ArgumentParser
-from os import listdir, linesep
-from os.path import isfile, join
+from os import linesep, path
 from subprocess import run, TimeoutExpired, STDOUT, PIPE, DEVNULL
 from time import perf_counter
 from collections import OrderedDict
@@ -44,12 +43,13 @@ def get_tests_for_suite(suite, mongo_root, test_binary):
     proc = run(cmd, stdout=PIPE, cwd=mongo_root)
     out = proc.stdout.decode('utf-8').splitlines()
 
-    tests = [join(mongo_root, line) for line in out if line.startswith(
+    tests = [path.join(mongo_root, line) for line in out if line.startswith(
         'jstests') and line.endswith('.js')]
 
     return tests
 
-if __name__ == '__main__':
+
+def get_cmd_args():
     parser = ArgumentParser(
         description='Run jstests/core tests with resmoke.py')
     parser.add_argument('-m', '--mongo-root', required=True,
@@ -64,10 +64,12 @@ if __name__ == '__main__':
         '--tests',
         nargs='+',
         help='Tests from selected suite to run, default: run all.')
-    args = parser.parse_args()
+    return parser.parse_args()
 
-    test_dir = join(args.mongo_root, 'jstests', args.suite)
-    test_binary = [join(args.mongo_root, 'buildscripts', 'resmoke.py')]
+
+def execute_tests(args):
+    test_dir = path.join(args.mongo_root, 'jstests', args.suite)
+    test_binary = [path.join(args.mongo_root, 'buildscripts', 'resmoke.py')]
     test_args = ['--continueOnFailure',
                  '--storageEngine=pmse',
                  '--suites={}'.format(args.suite),
@@ -86,7 +88,7 @@ if __name__ == '__main__':
     margin = len(max(tests, key=len)) + 8
     for test in sorted(tests):
         cmd = test_binary + test_args
-        cmd.append(join(test_dir, test))
+        cmd.append(path.join(test_dir, test))
         print_output = False
         skipped = False
 
@@ -112,7 +114,7 @@ if __name__ == '__main__':
             elif 'were skipped, 0 failed, 0 errored' in out:
                 print('PASSED WITH WARNINGS. Test exited with code {}'.format(
                     proc.returncode), end='')
-                passed_warnings[test] = proc.exitcode
+                passed_warnings[test] = proc.returncode
                 print_output = True
             else:
                 print('FAILED', end='')
@@ -126,6 +128,10 @@ if __name__ == '__main__':
             if not skipped:
                 run('rm -r {}/job0'.format(args.dbpath), shell=True)
 
+    return tests, failed, timeout, passed_warnings
+
+
+def print_summary(tests, failed, timeout, passed_warnings):
     if not failed and not timeout:
         print('All tests passed')
     else:
@@ -140,3 +146,13 @@ if __name__ == '__main__':
         print('{} tests passed but exited with non-zero code:'.format(len(passed_warnings)))
         for test, returncode in passed_warnings.items():
             print('{0} ({1})'.format(test, returncode))
+
+
+def main():
+    args = get_cmd_args()
+    tests, failed, timeout, passed_warnings = execute_tests(args)
+    print_summary(tests, failed, timeout, passed_warnings)
+
+
+if __name__ == '__main__':
+    main()

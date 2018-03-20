@@ -185,8 +185,9 @@ class PmseMap {
         bool status = true;
         try {
             txn->recoveryUnit()->registerChange(new DropListChange(pop, _list, _size));
-            delete_persistent<PmseListIntPtr[]>(_list, _size);
-            _counter = 0;
+            delete_persistent_atomic<PmseListIntPtr[]>(_list, _size);
+            initialize(true);
+            _counter = 1;
             _hashmapSize = 0;
             _dataSize = 0;
             _pmCounter = 0;
