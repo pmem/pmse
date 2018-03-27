@@ -55,7 +55,7 @@ PmseSortedDataInterface::PmseSortedDataInterface(StringData ident,
                                                  const IndexDescriptor* desc,
                                                  StringData dbpath,
                                                  std::map<std::string, pool_base> *pool_handler)
-    : _dbpath(dbpath), _desc(desc) {
+    : _dbpath(dbpath), _desc(*desc) {
     try {
         if (pool_handler->count(ident.toString()) > 0) {
             _pm_pool = pool<PmseTree>((*pool_handler)[ident.toString()]);
@@ -102,9 +102,9 @@ Status PmseSortedDataInterface::insert(OperationContext* txn,
     }
     try {
         IndexKeyEntry entry(key.getOwned(), loc);
-        status = _tree->insert(_pm_pool, entry, _desc->keyPattern(), dupsAllowed);
+        status = _tree->insert(_pm_pool, entry, _desc.keyPattern(), dupsAllowed);
         if (status == Status::OK()) {
-            txn->recoveryUnit()->registerChange(new InsertIndexChange(_tree, _pm_pool, key, loc, dupsAllowed, _desc));
+            txn->recoveryUnit()->registerChange(new InsertIndexChange(_tree, _pm_pool, key, loc, dupsAllowed, &_desc));
         }
     } catch (std::exception &e) {
         log() << e.what();
@@ -121,10 +121,10 @@ void PmseSortedDataInterface::unindex(OperationContext* txn, const BSONObj& key,
     IndexKeyEntry entry(key.getOwned(), loc);
     try {
         transaction::exec_tx(_pm_pool, [this, &entry, dupsAllowed, txn, &status] {
-           status = _tree->remove(_pm_pool, entry, dupsAllowed, _desc->keyPattern());
+           status = _tree->remove(_pm_pool, entry, dupsAllowed, _desc.keyPattern());
         });
 	    if (status == true) {
-            txn->recoveryUnit()->registerChange(new RemoveIndexChange(_tree, _pm_pool, key, loc, dupsAllowed, _desc->keyPattern()));
+            txn->recoveryUnit()->registerChange(new RemoveIndexChange(_tree, _pm_pool, key, loc, dupsAllowed, _desc.keyPattern()));
         }
     } catch (std::exception &e) {
         log() << e.what();
@@ -140,8 +140,8 @@ Status PmseSortedDataInterface::dupKeyCheck(OperationContext* txn,
 std::unique_ptr<SortedDataInterface::Cursor> PmseSortedDataInterface::newCursor(
                 OperationContext* txn, bool isForward) const {
     return stdx::make_unique <PmseCursor> (txn, isForward, _tree,
-                                           _desc->keyPattern(),
-                                           _desc->unique());
+                                           _desc.keyPattern(),
+                                           _desc.unique());
 }
 
 class PmseSortedDataBuilderInterface : public SortedDataBuilderInterface {
