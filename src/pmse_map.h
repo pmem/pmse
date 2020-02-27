@@ -41,7 +41,6 @@
 #include <libpmemobj++/pool.hpp>
 #include <libpmemobj++/persistent_ptr.hpp>
 #include <libpmemobj++/mutex.hpp>
-#include <libpmemobj++/detail/pexceptions.hpp>
 #include <libpmemobj++/make_persistent_array_atomic.hpp>
 
 #include <atomic>
