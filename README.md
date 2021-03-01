@@ -5,6 +5,7 @@ Persistent Memory Storage Engine is fully compatible with NVDIMM’s alternative
 
 ## Dependencies
 -	[Persistent Memory Development Kit (PMDK)](https://github.com/pmem/pmdk)
+-	[C++ Bindings for PMDK library](https://github.com/pmem/libpmemobj-cpp)
 -	[MongoDB](https://github.com/mongodb/mongo)
 
 ## Building
@@ -14,19 +15,27 @@ First, try to compile MongoDB using this: https://github.com/mongodb/mongo/wiki/
 To use PMSE module with MongoDB, in the mongo repository directory do the following:
 ```
 cd ~/mongo
+git checkout r3.5.13 -b r3.5.13
+pip2 install -r buildscripts/requirements.txt
 mkdir -p src/mongo/db/modules/
 ln -sf ~/pmse src/mongo/db/modules/pmse
 ```
 Then you can compile:
 ```
-scons LIBPATH=path_to_libraries --dbg=off --opt=on core
+scons LIBPATH=path_to_pmdk_libraries --dbg=off --opt=on core
+```
+or when you have troubles with compilation:
+```
+python2 buildscripts/scons.py LIBPATH=path_to_pmdk_libraries -j $(nproc --all) core --disable-warnings-as-errors --dbg=off --opt=on
 ```
 Some operating systems have newer version of GCC so you shoud use GCC-5, for this purpose use CC and CXX flags for scons:
 ```
 scons CC=gcc-5 CXX=g++-5 LIBPATH=/usr/local/lib --dbg=off --opt=on core
 ```
 
-Typical library path for PMDK is /usr/local/lib/ or /usr/local/lib64/ and it depends on system you use. 
+Typical library path for PMDK is /usr/local/lib/ or /usr/local/lib64/ and it depends on system you use.
+Sometimes (e.g. Fedora) you need to specify PKG_CONFIG_PATH to PMDK libraries before libpmemobj-cpp compilation.
+
 To clean after building:
 ```
 scons –c
